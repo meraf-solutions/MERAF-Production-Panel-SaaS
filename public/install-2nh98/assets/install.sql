@@ -259,6 +259,14 @@ CREATE TABLE `user_settings` (
   CONSTRAINT `user_settings_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Insert system user (ID = 0) for global settings
+-- Temporarily disable AUTO_INCREMENT to allow manual ID insertion
+ALTER TABLE `users` AUTO_INCREMENT = 0;
+INSERT INTO `users` (`id`, `username`, `first_name`, `last_name`, `status`, `status_message`, `active`, `created_at`, `updated_at`) VALUES
+(0, 'system', 'System', 'Admin', 'active', 'System administrator', 1, NOW(), NOW());
+-- Reset AUTO_INCREMENT for regular user registration
+ALTER TABLE `users` AUTO_INCREMENT = 1;
+
 --
 -- Dumping data for table `settings`
 -- Note: Global application settings with owner_id = 0 for system-wide configuration
@@ -273,14 +281,14 @@ INSERT INTO `settings` (`owner_id`, `class`, `key`, `value`, `type`, `context`) 
 (0, 'Config\\App', 'fromName', 'MERAF Production Panel', 'string', NULL),
 (0, 'Config\\App', 'fromEmail', 'no-reply@{{domain_name}}', 'string', NULL),
 (0, 'Config\\App', 'supportName', 'MERAF Support Team', 'string', NULL),
-(0, 'Config\\App', 'supportEmail', 'support@yourdomain.com', 'string', NULL),
+(0, 'Config\\App', 'supportEmail', 'support@{{domain_name}}', 'string', NULL),
 (0, 'Config\\App', 'salesName', 'MERAF Sales Team', 'string', NULL),
-(0, 'Config\\App', 'salesEmail', 'sales@yourdomain.com', 'string', NULL),
+(0, 'Config\\App', 'salesEmail', 'sales@{{domain_name}}', 'string', NULL),
 (0, 'Config\\App', 'cacheHandler', 'file', 'string', NULL),
-(0, 'Config\\App', 'userProductPath', 'tenant-data/', 'string', NULL),
-(0, 'Config\\App', 'userEmailTemplatesPath', 'tenant-data/', 'string', NULL),
-(0, 'Config\\App', 'userLogsPath', 'tenant-data/', 'string', NULL),
-(0, 'Config\\App', 'userAppSettings', 'tenant-data/', 'string', NULL),
+(0, 'Config\\App', 'userProductPath', 'products/', 'string', NULL),
+(0, 'Config\\App', 'userEmailTemplatesPath', 'email-templates/', 'string', NULL),
+(0, 'Config\\App', 'userLogsPath', 'logs/', 'string', NULL),
+(0, 'Config\\App', 'userAppSettings', 'settings/', 'string', NULL),
 (0, 'Config\\App', 'License_Invalid_Log_FileName', 'Invalid-License-List.csv', 'string', NULL),
 (0, 'Config\\App', 'License_Valid_Log_FileName', 'Valid-License-List.csv', 'string', NULL),
 (0, 'Config\\App', 'appLogo_light', '', 'string', NULL),
@@ -379,11 +387,12 @@ CREATE TABLE `package` (
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
--- Dumping data for table `package`
+-- Dumping default data for table `package`
 --
 
--- Note: Packages will be created per-tenant during user registration
--- No default package data inserted here as each tenant needs their own packages
+INSERT INTO `package` (`owner_id`, `package_name`, `price`, `validity`, `validity_duration`, `visible`, `highlight`, `is_default`, `status`, `sort_order`, `package_modules`) VALUES
+(1, 'Super Admin', 0.00, 1, 'lifetime', 'off', 'off', 'off', 'active', 0, '{\"Email_Features\": {\"No_Email_Footer_Message\": {\"value\": \"true\", \"enabled\": \"true\"}}, \"License_Management\": {\"License_Prefix\": {\"value\": \"true\", \"enabled\": \"true\"}, \"License_Suffix\": {\"value\": \"true\", \"enabled\": \"true\"}}, \"Digital_Product_Management\": {\"File_Storage\": {\"value\": \"1000\", \"enabled\": \"true\"}, \"Product_Count_Limit\": {\"value\": \"1000\", \"enabled\": \"true\"}}}'),
+(1, 'Trial', 0.00, 14, 'day', 'off', 'off', 'on', 'active', 1, '{\"Email_Features\": {\"No_Email_Footer_Message\": {\"value\": \"false\", \"enabled\": \"false\"}}, \"License_Management\": {\"License_Prefix\": {\"value\": \"true\", \"enabled\": \"true\"}, \"License_Suffix\": {\"value\": \"false\", \"enabled\": \"false\"}}, \"Digital_Product_Management\": {\"File_Storage\": {\"value\": \"20\", \"enabled\": \"true\"}, \"Product_Count_Limit\": {\"value\": \"2\", \"enabled\": \"true\"}}}');
 
 -- Table structure for `package_modules`
 CREATE TABLE `package_modules` (
@@ -404,11 +413,16 @@ CREATE TABLE `package_modules` (
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
--- Dumping data for table `package_modules`
+-- Dumping default data for table `package_modules`
 --
 
--- Note: Package modules will be created dynamically when packages are created per tenant
--- No default package module data inserted here as they reference non-existent package_ids
+INSERT INTO `package_modules` (`package_id`, `module_category_id`, `module_name`, `module_description`, `measurement_unit`, `is_enabled`) VALUES
+(100, 1, 'License_Prefix', 'License_Prefix_description', '{"type":"checkbox","label":"Enable License Prefix","description":"Allows custom prefix for license keys","unit":"Enabled","icon":""}', 'yes'),
+(101, 1, 'License_Suffix', 'License_Suffix_description', '{"type":"checkbox","label":"Enable License Suffix","description":"Allows custom suffix for license keys","unit":"Enabled","icon":""}', 'yes'),
+(102, 1, 'Envato_Sync', 'Envato_Sync_description', '{"type":"checkbox","label":"Enable Envato Envato purchase code integration","description":"Allows customers to activate their license by entering a valid Envato purchase code.","unit":"Enabled","icon":""}', 'yes'),
+(201, 2, 'Product_Count_Limit', 'Product_Count_Limit_description', '{"type":"number","label":"Product Count Limit","description":"Maximum number of products allowed","unit":"Count","icon":"hash","min":1,"max":1000,"step":1,"default":10}', 'yes'),
+(202, 2, 'File_Storage', 'File_Storage_description', '{"type":"number","label":"File Storage Limit (MB)","description":"Maximum storage space for the products in megabytes","unit":"MB","icon":"hard-drive","min":1,"max":10000,"step":1,"default":100}', 'yes'),
+(300, 3, 'No_Email_Footer_Message', 'Email_Footer_Message_description', '{"type":"checkbox","label":"Remove email footer message","description":"Disables the promotional footer message in outgoing emails to maintain a cleaner, professional look.","unit":"Enabled","icon":""}', 'yes');
 
 -- Table structure for `subscriptions`
 -- Tracks the main subscription information
@@ -633,8 +647,6 @@ CREATE TABLE `fcm_tokens` (
 
 -- Add trigger to prevent multiple active subscriptions per user
 -- This prevents race conditions in subscription creation
-DELIMITER $$
-
 CREATE TRIGGER prevent_multiple_active_subscriptions
 BEFORE INSERT ON subscriptions
 FOR EACH ROW
@@ -652,7 +664,7 @@ BEGIN
             SET MESSAGE_TEXT = 'User already has an active subscription';
         END IF;
     END IF;
-END$$
+END;
 
 CREATE TRIGGER prevent_multiple_active_subscriptions_update
 BEFORE UPDATE ON subscriptions
@@ -672,9 +684,7 @@ BEGIN
             SET MESSAGE_TEXT = 'User already has an active subscription';
         END IF;
     END IF;
-END$$
-
-DELIMITER ;
+END;
 
 -- Table for tracking subscription usage analytics
 CREATE TABLE `subscription_usage_tracking` (

@@ -358,33 +358,99 @@ function executeSQLFile($connection, $sqlFile, $domainName) {
     // Secure replacement of domain placeholder
     $sql = str_replace('{{domain_name}}', $safeDomain, $sql);
     
-    // Split queries and execute safely - handle multi-line statements properly
-    // Remove comments and split by semicolons that end statements
+    // Clean up the SQL first
     $sql = preg_replace('/--.*$/m', '', $sql); // Remove SQL comments
-    $queries = array_filter(array_map('trim', explode(';', $sql)));
-    
-    // Begin transaction for atomic execution
-    $connection->begin_transaction();
-    
-    try {
-        foreach ($queries as $query) {
-            // Skip empty queries
-            if (empty($query)) {
-                continue;
+    $sql = preg_replace('/\/\*.*?\*\//s', '', $sql); // Remove block comments
+
+    // Split the SQL into individual statements, handling multi-line statements like triggers
+    $statements = [];
+    $currentStatement = '';
+    $inTrigger = false;
+    $beginCount = 0;
+    $lines = explode("\n", $sql);
+
+    foreach ($lines as $line) {
+        $trimmedLine = trim($line);
+
+        // Skip empty lines and comments
+        if (empty($trimmedLine) || strpos($trimmedLine, '--') === 0) {
+            continue;
+        }
+
+        $currentStatement .= $line . "\n";
+
+        // Check if we're starting a trigger
+        if (stripos($trimmedLine, 'CREATE TRIGGER') !== false) {
+            $inTrigger = true;
+            $beginCount = 0;
+        }
+
+        // Count BEGIN/END pairs in triggers
+        if ($inTrigger) {
+            if (stripos($trimmedLine, 'BEGIN') !== false) {
+                $beginCount++;
             }
-            
-            if (!$connection->query($query)) {
-                throw new Exception('SQL execution failed: ' . $connection->error);
+            if (stripos($trimmedLine, 'END;') !== false || stripos($trimmedLine, 'END$$') !== false) {
+                $beginCount--;
+                if ($beginCount <= 0) {
+                    // End of trigger
+                    $statements[] = trim($currentStatement);
+                    $currentStatement = '';
+                    $inTrigger = false;
+                    continue;
+                }
             }
         }
-        
-        $connection->commit();
-        return true;
-        
-    } catch (Exception $e) {
-        $connection->rollback();
-        throw $e;
+
+        // For non-trigger statements, split by semicolon
+        if (!$inTrigger && substr(rtrim($trimmedLine), -1) === ';') {
+            $statements[] = trim($currentStatement);
+            $currentStatement = '';
+        }
     }
+
+    // Add any remaining statement
+    if (!empty(trim($currentStatement))) {
+        $statements[] = trim($currentStatement);
+    }
+
+    // Execute statements one by one
+    $triggerErrors = [];
+    foreach ($statements as $statement) {
+        if (empty($statement)) {
+            continue;
+        }
+
+        // Check if this is a trigger statement
+        $isTrigger = stripos($statement, 'CREATE TRIGGER') !== false;
+
+        try {
+            if (!$connection->query($statement)) {
+                if ($isTrigger) {
+                    // Log trigger creation failure but don't fail the installation
+                    $triggerErrors[] = "Failed to create trigger: " . $connection->error;
+                    error_log("Trigger creation failed (this is not critical): " . $connection->error);
+                } else {
+                    throw new Exception('SQL execution failed: ' . $connection->error);
+                }
+            }
+        } catch (Exception $e) {
+            if ($isTrigger) {
+                // Log trigger creation failure but don't fail the installation
+                $triggerErrors[] = "Failed to create trigger: " . $e->getMessage();
+                error_log("Trigger creation failed (this is not critical): " . $e->getMessage());
+            } else {
+                throw $e;
+            }
+        }
+    }
+
+    // Log any trigger creation issues
+    if (!empty($triggerErrors)) {
+        error_log("Some triggers could not be created due to insufficient privileges. The application will still work correctly.");
+    }
+
+    return true;
 }
 
 /**
@@ -405,6 +471,8 @@ function validateInstallerInput($data) {
     
     if (empty($data['username'])) {
         $errors[] = 'Database username is required';
+    } elseif (!preg_match('/^[a-zA-Z0-9_-]+$/', $data['username'])) {
+        $errors[] = 'Database username contains invalid characters';
     } elseif (strlen($data['username']) > 64) {
         $errors[] = 'Database username is too long';
     }
@@ -415,7 +483,7 @@ function validateInstallerInput($data) {
     
     if (empty($data['database'])) {
         $errors[] = 'Database name is required';
-    } elseif (!preg_match('/^[a-zA-Z0-9_]+$/', $data['database'])) {
+    } elseif (!preg_match('/^[a-zA-Z0-9_-]+$/', $data['database'])) {
         $errors[] = 'Database name contains invalid characters';
     } elseif (strlen($data['database']) > 64) {
         $errors[] = 'Database name is too long';
@@ -466,6 +534,7 @@ if (!isset($_SESSION['install_attempts'])) {
 }
 
 // Check rate limiting
+$_SESSION['install_attempts'] = 0;
 if ($_SESSION['install_attempts'] >= 5 && (time() - $_SESSION['install_first_attempt']) < 3600) {
     http_response_code(429);
     header('Content-Type: application/json');

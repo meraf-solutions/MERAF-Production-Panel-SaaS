@@ -226,9 +226,9 @@ foreach ($writablePaths as $path) {
                                         <div class="col-md-6">
                                             <div class="mb-3">
                                                 <label class="form-label">Database Name <span class="text-danger">*</span></label>
-                                                <input name="database" id="database" type="text" class="form-control" 
-                                                       placeholder="database_name" required maxlength="64" 
-                                                       pattern="[a-zA-Z0-9_]+">
+                                                <input name="database" id="database" type="text" class="form-control"
+                                                       placeholder="database_name" required maxlength="64"
+                                                       pattern="[a-zA-Z0-9_-]+">
                                             </div>
                                         </div>
                                     </div>
@@ -237,8 +237,9 @@ foreach ($writablePaths as $path) {
                                         <div class="col-md-6">
                                             <div class="mb-3">
                                                 <label class="form-label">Database Username <span class="text-danger">*</span></label>
-                                                <input name="username" id="username" type="text" class="form-control" 
-                                                       placeholder="database_username" required maxlength="64">
+                                                <input name="username" id="username" type="text" class="form-control"
+                                                       placeholder="database_username" required maxlength="64"
+                                                       pattern="[a-zA-Z0-9_-]+">
                                             </div>
                                         </div>
                                         <div class="col-md-6">

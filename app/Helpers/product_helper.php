@@ -263,11 +263,11 @@ if (!function_exists('allProductCurrentVersions')) {
         // Iterate through the product list to gather version details
         foreach ($productList as $productName) {
             $productBasename = productBasename($productName, $userID);
-            // Check if $productBasename exists in $productDetails before accessing ['version']
-            if (isset($productDetails[$productBasename])) {
+            // Check if $productBasename exists in $productDetails and has version key before accessing ['version']
+            if (isset($productDetails[$productBasename]) && isset($productDetails[$productBasename]['version'])) {
                 $productVersionList[$productName] = $productDetails[$productBasename]['version'];
             } else {
-                // Handle the case where $productBasename doesn't exist in $productDetails
+                // Handle the case where $productBasename doesn't exist in $productDetails or version key is missing
                 // For example, set a default version or log the error
                 $productVersionList[$productName] = 'Unknown'; // Set a default version
             }

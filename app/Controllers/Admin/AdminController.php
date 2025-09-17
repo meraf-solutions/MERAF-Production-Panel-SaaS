@@ -1168,7 +1168,7 @@ class AdminController extends Home
 				
 				while (($file = readdir($dir)) !== false) {
 					if ($file === '.' || $file === '..' || 
-						in_array($file, ['_BACKUP', 'Build-Release', 'debugbar', 'logs'])) {
+						in_array($file, ['_BACKUP', 'Build-Release', 'debugbar', 'logs', 'single-user-prodpanel'])) {
 						continue;
 					}
 	

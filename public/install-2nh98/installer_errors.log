@@ -1,0 +1,39 @@
+[17-Sep-2025 18:04:10 UTC] Installation error: Database name contains invalid characters
+[17-Sep-2025 18:05:09 UTC] Installation error: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''<div class=\"footer\" style=\"background:#f8f9fa' at line 35
+[17-Sep-2025 18:06:16 UTC] Installation error: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''<div class=\"footer\" style=\"background:#f8f9fa' at line 35
+[17-Sep-2025 18:06:55 UTC] Installation error: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''<div class=\"footer\" style=\"background:#f8f9fa' at line 35
+[17-Sep-2025 18:10:44 UTC] Installation error: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'DELIMITER $$
+
+CREATE TRIGGER prevent_multiple_active_subscriptions
+BEFORE INSERT' at line 1
+[17-Sep-2025 18:12:50 UTC] Installation error: You do not have the SUPER privilege and binary logging is enabled (you *might* want to use the less safe log_bin_trust_function_creators variable)
+[17-Sep-2025 18:13:39 UTC] Trigger creation failed (this is not critical): You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '' at line 5
+[17-Sep-2025 18:13:39 UTC] Installation error: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'IF NEW.subscription_status = 'active' THEN
+SELECT COUNT(*) INTO active_count
+FRO' at line 1
+[17-Sep-2025 18:14:19 UTC] Trigger creation failed (this is not critical): You do not have the SUPER privilege and binary logging is enabled (you *might* want to use the less safe log_bin_trust_function_creators variable)
+[17-Sep-2025 18:14:19 UTC] Trigger creation failed (this is not critical): You do not have the SUPER privilege and binary logging is enabled (you *might* want to use the less safe log_bin_trust_function_creators variable)
+[17-Sep-2025 18:14:19 UTC] Some triggers could not be created due to insufficient privileges. The application will still work correctly.
+[17-Sep-2025 18:14:19 UTC] Invalid cache folder: /home/meraf/web/saas-prodpanel.merafsolutions.com/public_html/writable/cache/
+[17-Sep-2025 18:14:19 UTC] Warning: Failed to clear cache
+[17-Sep-2025 18:17:46 UTC] Trigger creation failed (this is not critical): You do not have the SUPER privilege and binary logging is enabled (you *might* want to use the less safe log_bin_trust_function_creators variable)
+[17-Sep-2025 18:17:46 UTC] Trigger creation failed (this is not critical): You do not have the SUPER privilege and binary logging is enabled (you *might* want to use the less safe log_bin_trust_function_creators variable)
+[17-Sep-2025 18:17:46 UTC] Some triggers could not be created due to insufficient privileges. The application will still work correctly.
+[17-Sep-2025 18:17:46 UTC] Invalid cache folder: /home/meraf/web/saas-prodpanel.merafsolutions.com/public_html/writable/cache/
+[17-Sep-2025 18:17:46 UTC] Warning: Failed to clear cache
+[17-Sep-2025 18:31:06 UTC] Installation error: Database username contains invalid characters
+[17-Sep-2025 18:31:20 UTC] Installation error: Duplicate entry '1-Super Admin' for key 'package.unique_owner_package'
+[17-Sep-2025 18:31:36 UTC] Installation error: Duplicate entry '1-Super Admin' for key 'package.unique_owner_package'
+[17-Sep-2025 18:32:32 UTC] Installation error: Table 'package_modules' already exists
+[17-Sep-2025 18:33:25 UTC] Installation error: Database username contains invalid characters
+[17-Sep-2025 18:33:34 UTC] Installation error: Table 'package_modules' already exists
+[17-Sep-2025 18:34:21 UTC] Trigger creation failed (this is not critical): You do not have the SUPER privilege and binary logging is enabled (you *might* want to use the less safe log_bin_trust_function_creators variable)
+[17-Sep-2025 18:34:21 UTC] Trigger creation failed (this is not critical): You do not have the SUPER privilege and binary logging is enabled (you *might* want to use the less safe log_bin_trust_function_creators variable)
+[17-Sep-2025 18:34:21 UTC] Some triggers could not be created due to insufficient privileges. The application will still work correctly.
+[17-Sep-2025 18:34:21 UTC] Invalid cache folder: /home/meraf/web/saas-prodpanel.merafsolutions.com/public_html/writable/cache/
+[17-Sep-2025 18:34:21 UTC] Warning: Failed to clear cache
+[17-Sep-2025 19:01:29 UTC] Trigger creation failed (this is not critical): You do not have the SUPER privilege and binary logging is enabled (you *might* want to use the less safe log_bin_trust_function_creators variable)
+[17-Sep-2025 19:01:29 UTC] Trigger creation failed (this is not critical): You do not have the SUPER privilege and binary logging is enabled (you *might* want to use the less safe log_bin_trust_function_creators variable)
+[17-Sep-2025 19:01:29 UTC] Some triggers could not be created due to insufficient privileges. The application will still work correctly.
+[17-Sep-2025 19:01:29 UTC] Invalid cache folder: /home/meraf/web/saas-prodpanel.merafsolutions.com/public_html/writable/cache/
+[17-Sep-2025 19:01:29 UTC] Warning: Failed to clear cache

@@ -79,7 +79,7 @@ if (!function_exists('getMyConfig')) {
             }
 
             // Regenerate the 'push_notification_badge' using the correct URL format
-            if($myConfig[$defaultAppKey]['push_notification_badge']) {
+            if(!empty($myConfig[$defaultAppKey]['push_notification_badge'])) {
                 $myConfig[$defaultAppKey]['push_notification_badge'] = base_url('writable/uploads/app-custom-assets/' . $myConfig[$defaultAppKey]['push_notification_badge']);
             }
             else {

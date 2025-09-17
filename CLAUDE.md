@@ -46,7 +46,11 @@ This is the MERAF Production Panel SaaS, a CodeIgniter 4-based multi-tenant web 
   - `DEVELOPMENT_WORKFLOW.md` - Development guidelines
 - `system/` - CodeIgniter 4 framework core (do not modify)
 - `writable/` - Application logs, cache, uploads
-  - `tenant-data/{user-id}/` - Per-tenant data directories
+- `user-data/` - Per-tenant data directories
+  - `{user-id}/products/` - Product files and metadata
+  - `{user-id}/email-templates/` - User-specific email templates
+  - `{user-id}/settings/` - User configuration and variations
+  - `{user-id}/logs/` - User-specific logs
 - `tests/` - PHPUnit test files
 - `vendor/` - Composer dependencies
 
@@ -134,6 +138,15 @@ Tests require database configuration in `app/Config/Database.php` under the 'tes
 - **Race Condition Prevention**: Database-level constraints prevent duplicate active subscriptions
 - **Audit Trail**: Complete subscription state change history
 - **Usage Analytics**: Granular tracking of feature usage against limits
+- **Foreign Key Resolution**: Automatic system user creation for global settings
+- **Constraint Validation**: CHECK constraints for data validation and integrity
+
+#### Installation Schema Enhancements
+- **System User Management**: Auto-creates user ID 0 for system-wide settings
+- **Default Package Setup**: Pre-configured Super Admin and Trial packages
+- **Module Categories**: License Management, Digital Product Management, Email Features
+- **Package Modules**: Feature definitions with JSON configuration
+- **Trigger Installation**: Graceful handling of database privilege limitations
 
 ## Key SaaS Features
 
@@ -165,6 +178,8 @@ Tests require database configuration in `app/Config/Database.php` under the 'tes
 - Usage analytics and resource monitoring
 - Multi-tenant notification system
 - Subscription billing integration
+- Automated user directory setup with security protections
+- Default email template extraction on first login
 
 ## Environment Setup
 
@@ -173,6 +188,64 @@ Tests require database configuration in `app/Config/Database.php` under the 'tes
 3. Configure application settings in `app/Config/` files
 4. Set proper file permissions on `writable/` directory
 5. Run `composer install` to install dependencies
+
+## Installation System
+
+### Enhanced Secure Installer
+- **Location**: `public/install/` (auto-renamed after installation)
+- **Security Features**: CSRF protection, rate limiting, input validation
+- **Database Support**: MySQL 5.7+, handles hyphens/underscores in names
+- **Privilege Management**: Graceful handling of limited database privileges
+- **Trigger Support**: Automatically creates database triggers when possible
+
+### Installation Process
+1. **System Requirements Check**: PHP version, extensions, permissions
+2. **Database Configuration**: Host, name, user credentials validation
+3. **Email Setup**: SMTP, Sendmail, or PHP Mail configuration
+4. **SQL Execution**: Robust parsing with trigger and delimiter support
+5. **Security Setup**: Creates system user, default packages, security files
+
+### Database Schema Setup
+- **System User**: Creates user ID 0 for global settings
+- **Default Packages**: Super Admin and Trial packages pre-configured
+- **Foreign Key Handling**: Resolves constraint dependencies automatically
+- **Index Optimization**: Performance-optimized indexes for subscriptions
+- **Security Triggers**: Race condition prevention (when privileges allow)
+
+### Installation Troubleshooting & Fixes
+
+#### Database Name/Username Validation
+- **Problem**: Database names/usernames with hyphens or underscores rejected
+- **Solution**: Updated validation regex to accept `[a-zA-Z0-9_-]+` pattern
+- **Files**: `install_secure.php`, `action_secure.php`
+
+#### SQL Parsing & Trigger Support
+- **Problem**: MySQL triggers with `DELIMITER` statements causing syntax errors
+- **Solution**: Enhanced SQL parser with multi-line statement support
+- **Features**:
+  - Proper `DELIMITER` handling for trigger creation
+  - Individual statement execution with trigger error isolation
+  - Graceful fallback when database privileges insufficient
+
+#### Foreign Key Constraint Resolution
+- **Problem**: Settings table references missing system user (ID 0)
+- **Solution**: Auto-creates system user before inserting settings
+- **Implementation**:
+  ```sql
+  -- Create system user for global settings
+  ALTER TABLE `users` AUTO_INCREMENT = 0;
+  INSERT INTO `users` (id, username, ...) VALUES (0, 'system', ...);
+  ALTER TABLE `users` AUTO_INCREMENT = 1;
+  ```
+
+#### Configuration Path Fixes
+- **Problem**: Extra `tenant-data/` nesting in user directories
+- **Solution**: Updated configuration paths to match expected structure
+- **Paths**:
+  - `userProductPath`: `'products/'`
+  - `userEmailTemplatesPath`: `'email-templates/'`
+  - `userLogsPath`: `'logs/'`
+  - `userAppSettings`: `'settings/'`
 
 ## Development Notes
 
@@ -275,6 +348,46 @@ if (!$validation['valid']) {
 - `setMyTimezone()` - User timezone management
 - `setMyLocale()` - Internationalization support
 
+### User Initialization System
+
+#### FirstLoginFilter Integration
+- **Automatic Setup**: Triggers on first user login (`last_active` is null)
+- **Directory Creation**: Creates secure user data directories
+- **Template Extraction**: Extracts default email templates from zip
+- **Key Generation**: Creates user-specific API keys and encryption keys
+- **Security Setup**: Applies `.htaccess` protection and access restrictions
+
+#### InitializeNewUser Library
+- **Directory Structure**: Creates `products/`, `email-templates/`, `settings/`, `logs/`
+- **Security Files**: Adds `.htaccess` and `index.php` protection files
+- **Default Content**: Extracts `default_email_template_v1.0.0.zip`
+- **JSON Configuration**: Sets up `product-variations.json` and `product-email-templates.json`
+- **Permissions**: Applies secure file/directory permissions (0750/0755)
+
+#### User Data Directory Structure
+```
+user-data/{userId}/
+├── .htaccess                    # Security protection
+├── index.php                   # Access denied script
+├── products/                   # Product files and metadata
+│   ├── .htaccess              # Directory protection
+│   ├── index.php              # Access denied
+│   ├── {product_name}/        # Product directories
+│   └── {sha1_hash}.json       # Product metadata files
+├── email-templates/           # User email templates
+│   ├── .htaccess
+│   ├── index.php
+│   └── default_email_template/ # Extracted default template
+├── settings/                  # User configuration
+│   ├── .htaccess
+│   ├── index.php
+│   ├── product-variations.json
+│   └── product-email-templates.json
+└── logs/                     # User-specific logs
+    ├── .htaccess
+    └── index.php
+```
+
 ### Advanced Subscription & Payment Libraries
 
 #### Payment Method Factory (`PaymentMethodFactory`)
@@ -367,12 +480,20 @@ KEY `idx_user_feature_date` (`user_id`, `feature_name`, `usage_date`)
 
 #### Data Integrity & Race Condition Prevention
 ```sql
--- MySQL triggers prevent multiple active subscriptions
+-- MySQL triggers prevent multiple active subscriptions (when privileges allow)
 CREATE TRIGGER prevent_multiple_active_subscriptions
 BEFORE INSERT ON subscriptions
 FOR EACH ROW
 BEGIN
-    -- Validation logic prevents race conditions
+    DECLARE active_count INT DEFAULT 0;
+    IF NEW.subscription_status = 'active' THEN
+        SELECT COUNT(*) INTO active_count
+        FROM subscriptions
+        WHERE user_id = NEW.user_id AND subscription_status = 'active';
+        IF active_count > 0 THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'User already has an active subscription';
+        END IF;
+    END IF;
 END;
 ```
 

@@ -26,12 +26,19 @@ $routes->post('set-timezone', 'Home::setTimezone');
 /******************************
 * Custom login with recaptcha *
 ******************************/
-if (!isset($myConfig)) { // Load the configuration
-    $myConfig = getMyConfig('', 0);
-}
 $reCAPTCHA_enabled = false; // Initialize reCAPTCHA enabled flag
-if ($myConfig['reCAPTCHA_enabled'] && $myConfig['reCAPTCHA_Site_Key'] && $myConfig['reCAPTCHA_Secret_Key']) {
-    $reCAPTCHA_enabled = true; // Check if reCAPTCHA is enabled and has the required keys
+try {
+    if (!isset($myConfig)) { // Load the configuration
+        $myConfig = getMyConfig('', 0);
+    }
+    if (isset($myConfig['reCAPTCHA_enabled']) && $myConfig['reCAPTCHA_enabled'] &&
+        isset($myConfig['reCAPTCHA_Site_Key']) && $myConfig['reCAPTCHA_Site_Key'] &&
+        isset($myConfig['reCAPTCHA_Secret_Key']) && $myConfig['reCAPTCHA_Secret_Key']) {
+        $reCAPTCHA_enabled = true; // Check if reCAPTCHA is enabled and has the required keys
+    }
+} catch (Exception $e) {
+    // If configuration loading fails (e.g., during installation), disable reCAPTCHA
+    $reCAPTCHA_enabled = false;
 }
 // $routes->get('login', 'AuthController::login', ['filter' => 'guest']);
 
