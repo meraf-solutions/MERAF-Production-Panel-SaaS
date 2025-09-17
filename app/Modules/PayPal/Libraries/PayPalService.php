@@ -944,7 +944,14 @@ class PayPalService
             // Search for a plan with a matching product ID
             foreach ($existingPlans->plans as $plan) {
                 if ($plan->product_id === 'PROD_' . $packageId) {
-                    return $plan->id;
+                    // Validate plan is still active and usable
+                    if (isset($plan->status) && in_array($plan->status, ['ACTIVE', 'CREATED'])) {
+                        log_message('info', "[PayPalService] Found active plan: {$plan->id} with status: {$plan->status}");
+                        return $plan->id;
+                    } else {
+                        log_message('warning', "[PayPalService] Found plan {$plan->id} but status is: " . ($plan->status ?? 'unknown'));
+                        // Continue searching for an active plan or create new one
+                    }
                 }
             }
 

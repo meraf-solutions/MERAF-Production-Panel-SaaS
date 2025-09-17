@@ -93,8 +93,8 @@ class TrialService
             $startDateUTC = $startDate->toDateTimeString();
             $endDateUTC   = $endDate->toDateTimeString();
 
-            // Generate transaction ID
-            $transactionId = $this->generateTransactionId(true);
+            // Generate standardized transaction ID
+            $transactionId = \App\Libraries\TransactionIdManager::generateSubscription('TRIAL', false);
 
             // Generate reference ID
             $referenceId = 'T-' . strtoupper(uniqid());
@@ -178,35 +178,31 @@ class TrialService
 
                         if($result) {
                             log_message('debug', '[Trial/TrialService] Successfully sent trial subscription created email!');
+                        } else {
+                            log_message('warning', '[Trial/TrialService] Failed to send trial subscription email but continuing with subscription creation');
                         }
                     } catch (\Exception $e) {
-                        // Log the error
+                        // Log the error but don't fail the subscription creation
                         log_message('error', '[Trial/TrialService] Failed to send trial subscription email: ' . $e->getMessage());
-                        
-                        // You might want to log additional details
                         log_message('debug', '[Trial/TrialService] Error details: ' . $e->getTraceAsString());
 
-                        $this->lastErrors = ['email' => 'Failed to send trial subscription email: ' . $e->getMessage()];
-                        return false;
+                        // Store error for potential later retry but don't fail the process
+                        $this->lastErrors['email_warning'] = 'Email sending failed but subscription created successfully';
                     } catch (\Error $e) {
-                        // Catch PHP errors
+                        // Catch PHP errors but don't fail the subscription
                         log_message('error', '[Trial/TrialService] Critical error while sending trial subscription email: ' . $e->getMessage());
                         log_message('debug', '[Trial/TrialService] Error details: ' . $e->getTraceAsString());
 
-                        $this->lastErrors = ['email' => 'Critical error while sending trial subscription email: ' . $e->getMessage()];
-                        return false;
+                        // Store error for potential later retry but don't fail the process
+                        $this->lastErrors['email_warning'] = 'Critical email error but subscription created successfully';
                     }
                 } else {
-                    log_message('error', '[Trial/TrialService] Failed to send trial subscription email: User not found');
-
-                    $this->lastErrors = ['email' => 'Failed to send trial subscription email: User not found'];
-                    return false;
+                    log_message('warning', '[Trial/TrialService] Failed to send trial subscription email: User not found, but subscription created successfully');
+                    $this->lastErrors['email_warning'] = 'User not found for email but subscription created successfully';
                 }
             } catch (\Exception $e) {
                 log_message('error', '[Trial/TrialService] Error sending trial subscription email: ' . $e->getMessage());
-
-                $this->lastErrors = ['email' => 'Error sending trial subscription email: ' . $e->getMessage()];
-                return false;
+                $this->lastErrors['email_warning'] = 'Error sending trial subscription email but subscription created successfully';
             }
 
             log_message('info', '[Trial Service] New trial subscription process completed successfully');
@@ -314,21 +310,19 @@ class TrialService
                     log_message('info', '[TrialService] Successfully sent trial subscription cancelled email!');
                 }
             } catch (\Exception $e) {
-                // Log the error
-                log_message('error', '[TrialService] Failed to send trial subscription cancelled emaill: ' . $e->getMessage());
-                
-                // You might want to log additional details
+                // Log the error but don't fail the cancellation
+                log_message('error', '[TrialService] Failed to send trial subscription cancelled email: ' . $e->getMessage());
                 log_message('debug', '[TrialService] Error details: ' . $e->getTraceAsString());
 
-                $this->lastErrors = ['subscription' => 'Get subscription failed: ' . $e->getMessage()];
-                return false;
+                // Store warning but don't fail the cancellation process
+                $this->lastErrors['email_warning'] = 'Failed to send cancellation email but subscription cancelled successfully';
             } catch (\Error $e) {
-                // Catch PHP errors
+                // Catch PHP errors but don't fail the cancellation
                 log_message('error', '[TrialService] Critical error while sending trial subscription cancelled email: ' . $e->getMessage());
                 log_message('debug', '[TrialService] Error details: ' . $e->getTraceAsString());
 
-                $this->lastErrors = ['subscription' => 'Get subscription failed: ' . $e->getMessage()];
-                return false;
+                // Store warning but don't fail the cancellation process
+                $this->lastErrors['email_warning'] = 'Critical error sending cancellation email but subscription cancelled successfully';
             }
 
             return true;
@@ -384,7 +378,7 @@ class TrialService
 
     public function generateTransactionId(): string
     {
-        return 'TRIAL-' . strtoupper(uniqid());
+        return \App\Libraries\TransactionIdManager::generateSubscription('TRIAL', false);
     }
 
 	/**

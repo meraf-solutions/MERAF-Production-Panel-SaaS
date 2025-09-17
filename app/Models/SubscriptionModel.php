@@ -317,10 +317,50 @@ class SubscriptionModel extends Model
     }
 
     /**
-     * Update subscription status
+     * Update subscription status with validation and logging
      */
-    public function updateSubscriptionStatus(string $subscriptionReference, string $status)
+    public function updateSubscriptionStatus(string $subscriptionReference, string $status, string $reason = '', ?int $changedBy = null)
     {
+        // Use state machine for proper validation and logging
+        $stateMachine = new \App\Libraries\SubscriptionStateMachine();
+
+        // Get subscription to find ID
+        $subscription = $this->where('subscription_reference', $subscriptionReference)->first();
+        if (!$subscription) {
+            log_message('error', "[SubscriptionModel] Subscription not found: {$subscriptionReference}");
+            return false;
+        }
+
+        // Use state machine for validated transition
+        $result = $stateMachine->transitionTo(
+            $subscription['id'],
+            $status,
+            $reason ?: "Status updated to {$status}",
+            'system',
+            $changedBy
+        );
+
+        if (!$result['success']) {
+            log_message('warning', "[SubscriptionModel] Status transition failed: {$result['message']}");
+            return false;
+        }
+
+        log_message('info', "[SubscriptionModel] Successfully updated subscription {$subscriptionReference} from {$result['old_status']} to {$result['new_status']}");
+        return true;
+    }
+
+    /**
+     * Legacy method for backwards compatibility - use updateSubscriptionStatus instead
+     */
+    public function updateSubscriptionStatusLegacy(string $subscriptionReference, string $status)
+    {
+        // Validate status
+        $validStatuses = ['active', 'cancelled', 'expired', 'pending', 'failed', 'suspended'];
+        if (!in_array($status, $validStatuses)) {
+            log_message('error', "[SubscriptionModel] Invalid subscription status: {$status}");
+            return false;
+        }
+
         if (in_array($status, ['cancelled', 'expired'])) {
             return $this->where('subscription_reference', $subscriptionReference)
                 ->set([
@@ -339,7 +379,7 @@ class SubscriptionModel extends Model
                 ])
                 ->update();
         }
-    
+
         return $this->where('subscription_reference', $subscriptionReference)
             ->set(['subscription_status' => $status])
             ->update();

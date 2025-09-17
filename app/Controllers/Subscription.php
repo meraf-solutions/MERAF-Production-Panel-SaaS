@@ -366,18 +366,28 @@ class Subscription extends Home
                 ]));                
             }
 
-            // Select the appropriate payment service based on the payment method
-            $paymentMethod = $this->PaymentMethods[$paymentMethodName] ?? $paymentMethodName;
-            $paymentServiceName = $paymentMethod['service_name'] ?? $paymentMethodName;
-            $paymentService = $this->ModuleScanner->loadLibrary($paymentMethodName, $paymentServiceName);
+            // Use PaymentMethodFactory for secure payment service creation
+            $paymentFactory = new \App\Libraries\PaymentMethodFactory();
+            try {
+                $paymentService = $paymentFactory->create($paymentMethodName);
+            } catch (\InvalidArgumentException $e) {
+                return view('layouts/single_page', array_merge($data, [
+                    'pageTitle' => lang('Notifications.Error_in_payment_method'),
+                    'alert' => [
+                        'success' => false,
+                        'message' => lang('Notifications.Error_in_the_selected_payment_method') . ': Invalid payment method',
+                        'redirect' => base_url('subscription/packages'),
+                    ]
+                ]));
+            }
 
-            // Check if the payment service exists
+            // Check if the payment service exists and is configured
             if (!$paymentService) {
                 return view('layouts/single_page', array_merge($data, [
                     'pageTitle' => lang('Notifications.Error_in_payment_method'),
                     'alert' => [
                         'success' => false,
-                        'message' => lang('Notifications.Error_in_the_selected_payment_method'),
+                        'message' => lang('Notifications.Error_in_the_selected_payment_method') . ': Service not configured',
                         'redirect' => base_url('subscription/packages'),
                     ]
                 ]));
@@ -449,9 +459,8 @@ class Subscription extends Home
 
             // Select the appropriate payment service based on the payment method
             $paymentMethodName = $getSubscription['payment_method'];
-            $paymentMethod = $this->PaymentMethods[$paymentMethodName] ?? $paymentMethodName;
-            $paymentServiceName = $paymentMethod['service_name'] ?? $paymentMethodName;
-            $paymentService = $this->ModuleScanner->loadLibrary($paymentMethodName, $paymentServiceName);
+            $paymentFactory = new \App\Libraries\PaymentMethodFactory();
+            $paymentService = $paymentFactory->create($paymentMethodName);
 
             // Get subscription details from the payment method
             $subscription = $paymentService->getSubscription($subscriptionId);
@@ -532,9 +541,8 @@ class Subscription extends Home
 
             // Select the appropriate payment service based on the payment method
             $paymentMethodName = $activeSubscription['payment_method'];
-            $paymentMethod = $this->PaymentMethods[$paymentMethodName] ?? $paymentMethodName;
-            $paymentServiceName = $paymentMethod['service_name'] ?? $paymentMethodName;
-            $paymentService = $this->ModuleScanner->loadLibrary($paymentMethodName, $paymentServiceName);
+            $paymentFactory = new \App\Libraries\PaymentMethodFactory();
+            $paymentService = $paymentFactory->create($paymentMethodName);
 
             // Cancel subscription in selected payment using subscription_reference
             $paymentService->cancelSubscription(
@@ -584,9 +592,8 @@ class Subscription extends Home
 
             // Select the appropriate payment service based on the payment method
             $paymentMethodName = $subscription['payment_method'];
-            $paymentMethod = $this->PaymentMethods[$paymentMethodName] ?? $paymentMethodName;
-            $paymentServiceName = $paymentMethod['service_name'] ?? $paymentMethodName;
-            $paymentService = $this->ModuleScanner->loadLibrary($paymentMethodName, $paymentServiceName);
+            $paymentFactory = new \App\Libraries\PaymentMethodFactory();
+            $paymentService = $paymentFactory->create($paymentMethodName);
 
             // Get ubscription details by payment method
             $paymentServiceSubscription = $paymentService->getSubscription($subscriptionId);
@@ -756,9 +763,8 @@ class Subscription extends Home
 
             // Select the appropriate payment service based on the payment method
             $paymentMethodName = $activeSubscription['payment_method'];
-            $paymentMethod = $this->PaymentMethods[$paymentMethodName] ?? $paymentMethodName;
-            $paymentServiceName = $paymentMethod['service_name'] ?? $paymentMethodName;
-            $paymentService = $this->ModuleScanner->loadLibrary($paymentMethodName, $paymentServiceName);
+            $paymentFactory = new \App\Libraries\PaymentMethodFactory();
+            $paymentService = $paymentFactory->create($paymentMethodName);
 
             // Cancel subscription in selected payment using subscription_reference
             $paymentService->cancelSubscription(

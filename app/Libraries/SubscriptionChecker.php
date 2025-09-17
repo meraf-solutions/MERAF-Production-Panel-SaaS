@@ -88,6 +88,33 @@ class SubscriptionChecker
     }
 
     /**
+     * Check and track usage in one call
+     *
+     * @param int    $userId       The ID of the user
+     * @param string $featureName  The name of the feature
+     * @param int    $usageAmount  Amount of usage to add/check (default 1)
+     * @param bool   $trackUsage   Whether to track the usage if allowed (default true)
+     *
+     * @return array Result with can_use boolean and usage details
+     */
+    public function checkAndTrackUsage(int $userId, string $featureName, int $usageAmount = 1, bool $trackUsage = true): array
+    {
+        // Use SubscriptionUsageTracker for comprehensive checking
+        $usageTracker = new \App\Libraries\SubscriptionUsageTracker();
+        $result = $usageTracker->checkUsageLimit($userId, $featureName, $usageAmount);
+
+        // If usage is allowed and tracking is enabled, track the usage
+        if ($result['can_use'] && $trackUsage) {
+            $tracked = $usageTracker->trackUsage($userId, $featureName, $usageAmount);
+            $result['usage_tracked'] = $tracked;
+        } else {
+            $result['usage_tracked'] = false;
+        }
+
+        return $result;
+    }
+
+    /**
      * Gets feature data from user's active subscription package
      *
      * @param int    $userId      The ID of the user

@@ -300,6 +300,20 @@ class Cronjob extends BaseController
         return json_encode($response);
     }
 
+    public function process_payment_retries()
+    {
+        $retryManager = new \App\Libraries\PaymentRetryManager();
+        $results = $retryManager->processRetries();
+
+        $response = [
+            'success' => true,
+            'status'  => 1,
+            'msg'     => "Payment retry processing completed. Processed {$results['processed']} retries: {$results['successful']} successful, {$results['failed']} failed, {$results['max_retries_reached']} reached max retries.",
+            'details' => $results
+        ];
+        return json_encode($response);
+    }
+
     public function do_auto_key_expiry()
     {
         // Check if auto-expiration is enabled in the config and license manager is not SLM

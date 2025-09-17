@@ -54,7 +54,7 @@ class OfflineService
             }
             log_message('info', '[Offline Service] User authenticated: ' . $user->id);
 
-            $transactionId = $this->generateTransactionId(true);
+            $transactionId = \App\Libraries\TransactionIdManager::generateSubscription('OFFLINE', true);
 
             $subscriptionData = [
                 'user_id' => $user->id,
@@ -227,9 +227,14 @@ class OfflineService
             log_message('debug', '[Offline Service] Start saving user input of reference ID in the subscription: ' . json_encode($subscription));
 
 
-            // Update subscription payment table
+            // Update subscription payment table with completed transaction ID
+            $completedTransactionId = \App\Libraries\TransactionIdManager::completePending(
+                $pendingInvoice['transaction_id'],
+                $referenceId
+            );
+
             $paymentData = [
-                'transaction_id' => str_replace('PENDING_PAYMENT', $referenceId, $pendingInvoice['transaction_id']),
+                'transaction_id' => $completedTransactionId,
                 'payment_status' => 'pending',
                 'payment_date' => Time::now()->setTimezone('UTC')
             ];
@@ -243,9 +248,9 @@ class OfflineService
                 throw new \Exception('Failed to update payment');
             }
 
-            // Update subscription table
+            // Update subscription table with completed transaction ID
             $subscriptionData = [
-                'transaction_id' => str_replace('PENDING_PAYMENT', $referenceId, $subscription['transaction_id']),
+                'transaction_id' => $completedTransactionId,
             ];
 
             log_message('info', '[Offline Service] Attempting to update subscription data: ' . json_encode($paymentData));
@@ -712,6 +717,6 @@ class OfflineService
 
     public function generateTransactionId($is_pending = false): string
     {
-        return 'INV-' . strtoupper(generateApiKey(3) . ':' . ($is_pending ? 'PENDING_PAYMENT' : uniqid()));
+        return \App\Libraries\TransactionIdManager::generatePayment('OFFLINE', $is_pending);
     }
 }

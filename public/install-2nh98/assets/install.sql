@@ -454,8 +454,14 @@ CREATE TABLE `subscriptions` (
   KEY `idx_payment_status` (`payment_status`),
   KEY `idx_payment_method` (`payment_method`),
   KEY `idx_payment_dates` (`last_payment_date`, `next_payment_date`),
+  KEY `idx_user_status` (`user_id`, `subscription_status`),
+  KEY `idx_next_payment_status` (`next_payment_date`, `subscription_status`),
+  KEY `idx_created_at` (`created_at`),
   CONSTRAINT `fk_subscription_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_subscription_package` FOREIGN KEY (`package_id`) REFERENCES `package` (`id`) ON DELETE RESTRICT
+  CONSTRAINT `fk_subscription_package` FOREIGN KEY (`package_id`) REFERENCES `package` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `chk_subscription_amount` CHECK (`amount_paid` >= 0),
+  CONSTRAINT `chk_subscription_billing_period` CHECK (`billing_period` > 0),
+  CONSTRAINT `chk_subscription_retry_count` CHECK (`retry_count` >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `subscription_payments` (
@@ -623,6 +629,92 @@ CREATE TABLE `fcm_tokens` (
   KEY `user_id` (`user_id`),
   KEY `idx_device_id` (`device_id`),
   CONSTRAINT `fcm_tokens_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Add trigger to prevent multiple active subscriptions per user
+-- This prevents race conditions in subscription creation
+DELIMITER $$
+
+CREATE TRIGGER prevent_multiple_active_subscriptions
+BEFORE INSERT ON subscriptions
+FOR EACH ROW
+BEGIN
+    DECLARE active_count INT DEFAULT 0;
+
+    IF NEW.subscription_status = 'active' THEN
+        SELECT COUNT(*) INTO active_count
+        FROM subscriptions
+        WHERE user_id = NEW.user_id
+        AND subscription_status = 'active';
+
+        IF active_count > 0 THEN
+            SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'User already has an active subscription';
+        END IF;
+    END IF;
+END$$
+
+CREATE TRIGGER prevent_multiple_active_subscriptions_update
+BEFORE UPDATE ON subscriptions
+FOR EACH ROW
+BEGIN
+    DECLARE active_count INT DEFAULT 0;
+
+    IF NEW.subscription_status = 'active' AND OLD.subscription_status != 'active' THEN
+        SELECT COUNT(*) INTO active_count
+        FROM subscriptions
+        WHERE user_id = NEW.user_id
+        AND subscription_status = 'active'
+        AND id != NEW.id;
+
+        IF active_count > 0 THEN
+            SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'User already has an active subscription';
+        END IF;
+    END IF;
+END$$
+
+DELIMITER ;
+
+-- Table for tracking subscription usage analytics
+CREATE TABLE `subscription_usage_tracking` (
+  `id` int UNSIGNED NOT NULL AUTO_INCREMENT,
+  `user_id` int UNSIGNED NOT NULL,
+  `subscription_id` int UNSIGNED NOT NULL,
+  `feature_name` varchar(100) NOT NULL,
+  `usage_count` int UNSIGNED NOT NULL DEFAULT 0,
+  `limit_value` int UNSIGNED DEFAULT NULL,
+  `usage_date` date NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_daily_usage` (`user_id`, `subscription_id`, `feature_name`, `usage_date`),
+  KEY `idx_user_feature_date` (`user_id`, `feature_name`, `usage_date`),
+  KEY `idx_subscription_usage` (`subscription_id`),
+  KEY `idx_usage_date` (`usage_date`),
+  CONSTRAINT `fk_usage_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_usage_subscription` FOREIGN KEY (`subscription_id`) REFERENCES `subscriptions` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `chk_usage_count` CHECK (`usage_count` >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Table for tracking subscription state changes
+CREATE TABLE `subscription_state_log` (
+  `id` int UNSIGNED NOT NULL AUTO_INCREMENT,
+  `subscription_id` int UNSIGNED NOT NULL,
+  `old_status` enum('active','cancelled','expired','pending','failed','suspended') DEFAULT NULL,
+  `new_status` enum('active','cancelled','expired','pending','failed','suspended') NOT NULL,
+  `reason` varchar(500) DEFAULT NULL,
+  `changed_by` int UNSIGNED DEFAULT NULL COMMENT 'User ID who made the change',
+  `change_source` enum('user','admin','system','webhook','cronjob') NOT NULL DEFAULT 'system',
+  `metadata` JSON DEFAULT NULL COMMENT 'Additional change metadata',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_subscription_log` (`subscription_id`),
+  KEY `idx_status_change` (`old_status`, `new_status`),
+  KEY `idx_change_source` (`change_source`),
+  KEY `idx_created_at` (`created_at`),
+  CONSTRAINT `fk_state_log_subscription` FOREIGN KEY (`subscription_id`) REFERENCES `subscriptions` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_state_log_user` FOREIGN KEY (`changed_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Enable foreign key checks
