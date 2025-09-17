@@ -229,7 +229,7 @@ CREATE TABLE `migrations` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Table structure for `settings`
+-- Table structure for `settings` (Global Application Settings)
 CREATE TABLE `settings` (
   `id` int NOT NULL AUTO_INCREMENT,
   `owner_id` int UNSIGNED NOT NULL,
@@ -245,32 +245,48 @@ CREATE TABLE `settings` (
   CONSTRAINT `settings_owner_id_foreign` FOREIGN KEY (`owner_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Table structure for `user_settings` (Per-Tenant Settings for SaaS)
+CREATE TABLE `user_settings` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int UNSIGNED NOT NULL,
+  `setting_name` varchar(255) NOT NULL,
+  `setting_value` text,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_user_setting` (`user_id`, `setting_name`),
+  KEY `idx_user_setting` (`user_id`, `setting_name`),
+  CONSTRAINT `user_settings_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 --
 -- Dumping data for table `settings`
+-- Note: Global application settings with owner_id = 0 for system-wide configuration
+-- Individual tenant settings should use user_settings table instead
 --
 
 INSERT INTO `settings` (`owner_id`, `class`, `key`, `value`, `type`, `context`) VALUES
 (0, 'Config\\App', 'appName', 'MERAF Production Panel SaaS', 'string', NULL),
-(0, 'Config\\App', 'appVersion', NULL, 'string', NULL),
-(0, 'Config\\App', 'companyName', 'The Company Name Inc.', 'string', NULL),
-(0, 'Config\\App', 'companyAddress', 'App Company Address And Other Details Here', 'string', NULL),
-(0, 'Config\\App', 'fromName', 'ProdPanel no reply', 'string', NULL),
+(0, 'Config\\App', 'appVersion', '1.0.0', 'string', NULL),
+(0, 'Config\\App', 'companyName', 'MERAF Digital Solutions', 'string', NULL),
+(0, 'Config\\App', 'companyAddress', 'MERAF Digital Solutions Address', 'string', NULL),
+(0, 'Config\\App', 'fromName', 'MERAF Production Panel', 'string', NULL),
 (0, 'Config\\App', 'fromEmail', 'no-reply@{{domain_name}}', 'string', NULL),
-(0, 'Config\\App', 'supportName', 'ProdPanel Support Team', 'string', NULL),
-(0, 'Config\\App', 'supportEmail', 'support@example.com', 'string', NULL),
-(0, 'Config\\App', 'salesName', 'ProdPanel Sales Team', 'string', NULL),
-(0, 'Config\\App', 'salesEmail', 'sales@example.com', 'string', NULL),
+(0, 'Config\\App', 'supportName', 'MERAF Support Team', 'string', NULL),
+(0, 'Config\\App', 'supportEmail', 'support@yourdomain.com', 'string', NULL),
+(0, 'Config\\App', 'salesName', 'MERAF Sales Team', 'string', NULL),
+(0, 'Config\\App', 'salesEmail', 'sales@yourdomain.com', 'string', NULL),
 (0, 'Config\\App', 'cacheHandler', 'file', 'string', NULL),
-(0, 'Config\\App', 'userProductPath', 'products/', 'string', NULL),
-(0, 'Config\\App', 'userEmailTemplatesPath', 'email-templates/', 'string', NULL),
-(0, 'Config\\App', 'userLogsPath', 'logs/', 'string', NULL),
-(0, 'Config\\App', 'userAppSettings', 'settings/', 'string', NULL),
+(0, 'Config\\App', 'userProductPath', 'tenant-data/', 'string', NULL),
+(0, 'Config\\App', 'userEmailTemplatesPath', 'tenant-data/', 'string', NULL),
+(0, 'Config\\App', 'userLogsPath', 'tenant-data/', 'string', NULL),
+(0, 'Config\\App', 'userAppSettings', 'tenant-data/', 'string', NULL),
 (0, 'Config\\App', 'License_Invalid_Log_FileName', 'Invalid-License-List.csv', 'string', NULL),
 (0, 'Config\\App', 'License_Valid_Log_FileName', 'Valid-License-List.csv', 'string', NULL),
 (0, 'Config\\App', 'appLogo_light', '', 'string', NULL),
 (0, 'Config\\App', 'appLogo_dark', '', 'string', NULL),
 (0, 'Config\\App', 'appIcon', '', 'string', NULL),
-(0, 'Config\\App', 'defaultTimezone', 'Atlantic/St_Helena', 'string', NULL),
+(0, 'Config\\App', 'defaultTimezone', 'UTC', 'string', NULL),
 (0, 'Config\\App', 'defaultLocale', 'en', 'string', NULL),
 (0, 'Config\\App', 'defaultTheme', 'system', 'string', NULL),
 (0, 'Config\\Tasks', 'enabled', '1', 'boolean', NULL),
@@ -284,7 +300,7 @@ INSERT INTO `settings` (`owner_id`, `class`, `key`, `value`, `type`, `context`) 
 (0, 'Config\\App', 'preloadEnabled', '', 'string', NULL),
 (0, 'Config\\App', 'packageCurrency', 'USD', 'string', NULL),
 (0, 'Config\\App', 'htmlEmailFooter', '<div class=\"footer\" style=\"background:#f8f9fa;padding:10px;text-align:center;font-size:12px;color:#6c757d;border-radius:0 0 5px 5px;margin-top:10px\">\r\n<p>Simplify your licensing & digital product management with <strong>{app_name}</strong>, your all-in-one solution for license and digital product management—brought to you by <strong>{company_name}</strong>.</p>\r\n<p style=\"text-align:center\"><a href=\"{app_url}\" style=\"display:inline-block;padding:10px 20px;text-decoration:none;border-radius:3px;margin:10px;color:#fff;background-color:#007bff\">Discover More</a></p>\r\n</div>', 'string', NULL),
-(0, 'Config\\App', 'textEmailFooter', '==========\r\nSimplify your licensing & digital product management with {app_name}, your all-in-one solution for license and digital product managemen—brought to you by {company_name} ({app_url})', 'string', NULL),
+(0, 'Config\\App', 'textEmailFooter', '==========\r\nSimplify your licensing & digital product management with {app_name}, your all-in-one solution for license and digital product management—brought to you by {company_name} ({app_url})', 'string', NULL),
 (0, 'Config\\App', 'PAYPAL_MODE', 'sandbox', 'string', NULL),
 (0, 'Config\\App', 'PAYPAL_SANDBOX_CLIENT_ID', '', 'string', NULL),
 (0, 'Config\\App', 'PAYPAL_SANDBOX_CLIENT_SECRET', '', 'string', NULL),
@@ -299,7 +315,7 @@ INSERT INTO `settings` (`owner_id`, `class`, `key`, `value`, `type`, `context`) 
 (0, 'Config\\App', 'PWA_App_icon_512x512', '', 'string', NULL),
 (0, 'Config\\App', 'push_notification_feature_enabled', NULL, 'string', NULL),
 (0, 'Config\\App', 'push_notification_badge', '', 'string', NULL),
-(0, 'Config\\App', 'fcm_apiKey', NULL, 'string', NULL)
+(0, 'Config\\App', 'fcm_apiKey', NULL, 'string', NULL),
 (0, 'Config\\App', 'fcm_authDomain', NULL, 'string', NULL),
 (0, 'Config\\App', 'fcm_projectId', NULL, 'string', NULL),
 (0, 'Config\\App', 'fcm_storageBucket', NULL, 'string', NULL),
@@ -366,9 +382,8 @@ CREATE TABLE `package` (
 -- Dumping data for table `package`
 --
 
-INSERT INTO `package` (`owner_id`, `package_name`, `price`, `validity`, `validity_duration`, `visible`, `highlight`, `is_default`, `status`, `sort_order`, `package_modules`) VALUES
-(1, 'Super Admin', 0.00, 1, 'lifetime', 'off', 'off', 'off', 'active', 0, '{\"Email_Features\": {\"No_Email_Footer_Message\": {\"value\": \"true\", \"enabled\": \"true\"}}, \"License_Management\": {\"License_Prefix\": {\"value\": \"true\", \"enabled\": \"true\"}, \"License_Suffix\": {\"value\": \"true\", \"enabled\": \"true\"}}, \"Digital_Product_Management\": {\"File_Storage\": {\"value\": \"1000\", \"enabled\": \"true\"}, \"Product_Count_Limit\": {\"value\": \"1000\", \"enabled\": \"true\"}}}'),
-(1, 'Trial', 0.00, 14, 'day', 'off', 'off', 'on', 'active', 1, '{\"Email_Features\": {\"No_Email_Footer_Message\": {\"value\": \"false\", \"enabled\": \"false\"}}, \"License_Management\": {\"License_Prefix\": {\"value\": \"true\", \"enabled\": \"true\"}, \"License_Suffix\": {\"value\": \"false\", \"enabled\": \"false\"}}, \"Digital_Product_Management\": {\"File_Storage\": {\"value\": \"20\", \"enabled\": \"true\"}, \"Product_Count_Limit\": {\"value\": \"2\", \"enabled\": \"true\"}}}');
+-- Note: Packages will be created per-tenant during user registration
+-- No default package data inserted here as each tenant needs their own packages
 
 -- Table structure for `package_modules`
 CREATE TABLE `package_modules` (
@@ -392,13 +407,8 @@ CREATE TABLE `package_modules` (
 -- Dumping data for table `package_modules`
 --
 
-INSERT INTO `package_modules` (`package_id`, `module_category_id`, `module_name`, `module_description`, `measurement_unit`, `is_enabled`) VALUES
-(100, 1, 'License_Prefix', 'License_Prefix_description', '{"type":"checkbox","label":"Enable License Prefix","description":"Allows custom prefix for license keys","unit":"Enabled","icon":""}', 'yes'),
-(101, 1, 'License_Suffix', 'License_Suffix_description', '{"type":"checkbox","label":"Enable License Suffix","description":"Allows custom suffix for license keys","unit":"Enabled","icon":""}', 'yes'),
-(102, 1, 'Envato_Sync', 'Envato_Sync_description', '{"type":"checkbox","label":"Enable Envato Envato purchase code integration","description":"Allows customers to activate their license by entering a valid Envato purchase code.","unit":"Enabled","icon":""}', 'yes'),
-(201, 2, 'Product_Count_Limit', 'Product_Count_Limit_description', '{"type":"number","label":"Product Count Limit","description":"Maximum number of products allowed","unit":"Count","icon":"hash","min":1,"max":1000,"step":1,"default":10}', 'yes'),
-(202, 2, 'File_Storage', 'File_Storage_description', '{"type":"number","label":"File Storage Limit (MB)","description":"Maximum storage space for the products in megabytes","unit":"MB","icon":"hard-drive","min":1,"max":10000,"step":1,"default":100}', 'yes'),
-(300, 3, 'No_Email_Footer_Message', 'Email_Footer_Message_description', '{"type":"checkbox","label":"Remove email footer message","description":"Disables the promotional footer message in outgoing emails to maintain a cleaner, professional look.","unit":"Enabled","icon":""}', 'yes');
+-- Note: Package modules will be created dynamically when packages are created per tenant
+-- No default package module data inserted here as they reference non-existent package_ids
 
 -- Table structure for `subscriptions`
 -- Tracks the main subscription information
