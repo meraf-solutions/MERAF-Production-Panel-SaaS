@@ -35,7 +35,7 @@ class Offline extends Home
         $data['section'] = 'Payment_Options';
         $data['subsection'] = 'Offline_Payment';
         $data['sideBarMenu'] = $this->sideBarMenu;
-        $data['userData'] = auth()->user();
+        $data['userData'] = $this->userAcctDetails;
         $data['lastLoginHistory'] = json_encode($this->lastLoginHistory());
         $data['myConfig'] = $this->myConfig;
     
@@ -83,7 +83,7 @@ class Offline extends Home
 
     public function processPayment()
     {
-        $data['userData'] = auth()->user();
+        $data['userData'] = $this->userAcctDetails;
         
         log_message('info', '[Offline/OfflineController] Starting processPayment');
         

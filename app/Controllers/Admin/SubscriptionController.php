@@ -32,7 +32,7 @@ class SubscriptionController extends AdminController
         $data['section'] = 'Subscription_Manager';
         $data['subsection'] = 'Subscription_List';
         $data['sideBarMenu'] = $this->sideBarMenu;
-        $data['userData'] = auth()->user();
+        $data['userData'] = $this->userAcctDetails;
         $data['lastLoginHistory'] = json_encode($this->lastLoginHistory());
         $data['myConfig'] = $this->myConfig;
 
@@ -74,7 +74,7 @@ class SubscriptionController extends AdminController
         $data['section'] = 'Subscription_Manager';
         $data['subsection'] = 'Subscription_Details';
         $data['sideBarMenu'] = $this->sideBarMenu;
-        $data['userData'] = auth()->user();
+        $data['userData'] = $this->userAcctDetails;
         $data['lastLoginHistory'] = json_encode($this->lastLoginHistory());
         $data['myConfig'] = $this->myConfig;
 
@@ -135,7 +135,7 @@ class SubscriptionController extends AdminController
         $data['section'] = 'Subscription_Manager';
         $data['subsection'] = 'Payments_History';
         $data['sideBarMenu'] = $this->sideBarMenu;
-        $data['userData'] = auth()->user();
+        $data['userData'] = $this->userAcctDetails;
         $data['lastLoginHistory'] = json_encode($this->lastLoginHistory());
         $data['myConfig'] = $this->myConfig;
 
@@ -218,7 +218,7 @@ class SubscriptionController extends AdminController
 		$data['section'] = 'Subscription_Manager';
 		$data['subsection'] = 'Reports';
 		$data['sideBarMenu'] = $this->sideBarMenu;
-		$data['userData'] = auth()->user();
+		$data['userData'] = $this->userAcctDetails;
 		$data['lastLoginHistory'] = json_encode($this->lastLoginHistory());
 		$data['myConfig'] = $this->myConfig;
 

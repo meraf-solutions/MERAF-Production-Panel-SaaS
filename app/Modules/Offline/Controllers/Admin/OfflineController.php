@@ -54,7 +54,7 @@ class OfflineController extends Subscription
         $data['section'] = 'Payment_Options';
         $data['subsection'] = 'Offline_Payment';
         $data['sideBarMenu'] = $this->sideBarMenu;
-        $data['userData'] = auth()->user();
+        $data['userData'] = $this->userAcctDetails;
         $data['lastLoginHistory'] = json_encode($this->lastLoginHistory());
         $data['myConfig'] = $this->myConfig;
         $data['payments'] = $this->OfflineService->getOfflinePayments();

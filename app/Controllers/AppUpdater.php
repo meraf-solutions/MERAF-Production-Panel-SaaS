@@ -5,6 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\I18n\Time;
 use CodeIgniter\Controller;
 use App\Models\UserSettingsModel;
+use App\Models\UserModel;
 
 class AppUpdater extends BaseController
 {
@@ -13,6 +14,7 @@ class AppUpdater extends BaseController
 
 	protected $myConfig;
 	protected $UserSettingsModel;
+	protected $UserModel;
 	
 	public function __construct()
 	{
@@ -22,7 +24,8 @@ class AppUpdater extends BaseController
 		setMyLocale();
 
 		// Initialize models
-		$this->UserSettingsModel = new UserSettingsModel();		
+		$this->UserSettingsModel = new UserSettingsModel();
+		$this->UserModel = new UserModel();		
 	}
 
 	protected function checkIfLoggedIn()
@@ -30,6 +33,30 @@ class AppUpdater extends BaseController
 		if(NULL === auth()->id()) {
 			return redirect()->to('login');
 		}
+	}
+
+	/**
+	 * Get user details with decrypted API key
+	 */
+	protected function getUserDetailsWithDecryptedApiKey()
+	{
+		$user = auth()->user();
+		if (!$user) {
+			return null;
+		}
+
+		// If user has an API key, decrypt it for display
+		if (!empty($user->api_key)) {
+			$decryptedApiKey = $this->UserModel->getUserApiKey($user->id);
+			if ($decryptedApiKey !== null) {
+				// Create a clone to avoid modifying the original user object
+				$userClone = clone $user;
+				$userClone->api_key = $decryptedApiKey;
+				return $userClone;
+			}
+		}
+
+		return $user;
 	}
 	
     public function index($reinstall = '')
@@ -46,7 +73,7 @@ class AppUpdater extends BaseController
             return redirect()->to(base_url('error_update'));
         }
 
-		$data['userData'] = auth()->user();
+		$data['userData'] = $this->getUserDetailsWithDecryptedApiKey();
 		$data['updateURL'] = $updateURL;
 		$data['myConfig'] = $this->myConfig;
 
@@ -101,7 +128,7 @@ class AppUpdater extends BaseController
 		$data['headingText'] = lang('Pages.Update_CodeIgniter');
 		$data['submitButton'] = lang('Pages.Proceed_With_The_Update');
 		$data['actionURL'] = base_url('process-codeigniter-updater');
-		$data['userData'] = auth()->user();
+		$data['userData'] = $this->getUserDetailsWithDecryptedApiKey();
 		$data['myConfig'] = $this->myConfig;
 	
 		// Pass the update URL to the view
