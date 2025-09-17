@@ -1734,19 +1734,24 @@
 					
                     /**
                      * Product validation
-                     *  */ 
+                     *  */
                     if(productReferenceSelect.val() === '') {
                         productReferenceSelect.addClass('is-invalid');
 
                         // Disable loading effect
-                        disableLoadingEffect(submitButton);	
-                    } else if (disallowedCharsRegex_name.test(productReferenceSelect.val())) {
-                        productReferenceSelect.addClass('is-invalid');
-
-                        // Disable loading effect
-                        disableLoadingEffect(submitButton);	
+                        disableLoadingEffect(submitButton);
                     } else {
-                        productReferenceSelect.addClass('is-valid');
+                        // Product names can contain numbers, letters, spaces, and common punctuation
+                        // Only check for potentially dangerous characters that could cause issues
+                        var disallowedCharsRegex_product = /[<>{}\\]/;
+                        if (disallowedCharsRegex_product.test(productReferenceSelect.val())) {
+                            productReferenceSelect.addClass('is-invalid');
+
+                            // Disable loading effect
+                            disableLoadingEffect(submitButton);
+                        } else {
+                            productReferenceSelect.addClass('is-valid');
+                        }
                     }					
 
                     /**

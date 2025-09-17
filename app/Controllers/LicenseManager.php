@@ -70,7 +70,7 @@ class LicenseManager extends BaseController
 		// Validate form data
 		$validationRules = [
 			'license_key' => 'required',
-			'product_ref' => 'required|alpha_numeric_punct',
+			'product_ref' => 'required',
 			'license_type' => 'required',
 			'purchase_id_' => 'required',
 			'first_name' => 'required|regex_match[/^[\p{L}\p{M}\s.\'-]+$/u]',
@@ -135,7 +135,7 @@ class LicenseManager extends BaseController
 		$validationRules = [
 			'id' => 'required',
 			'license_key' => 'required',
-			'product_ref' => 'required|alpha_numeric_punct',
+			'product_ref' => 'required',
 			'license_type' => 'required',
 			'purchase_id_' => 'required',
 			'first_name' => 'required|regex_match[/^[\p{L}\p{M}\s.-]+$/u]',
@@ -965,13 +965,7 @@ class LicenseManager extends BaseController
 
 	public function sendEmailtoClient_new_license($licenseKey, $licenseType, $clientFullName, $clientEmail, $whatProduct)
 	{
-		// Return the response
-		return json_encode([
-			'success' => false,
-			'status'  => 0,
-			'msg'     => lang('Notifications.error_new_license_not_set_to_send_email'),
-		]);
-
+		// Check if email sending is enabled
 		if($this->myConfig['sendEmailNewLicense']) {
 			$clientFullName = urldecode($clientFullName);
 			$clientEmail = urldecode($clientEmail);     
@@ -1018,16 +1012,16 @@ class LicenseManager extends BaseController
 			Full Name: {clientFullName}
 			Email: {clientEmail}
 			Product: {whatProduct}', $info);
+
+			return json_encode($response);
 		}
 
-		// Return the response
+		// Return error if email sending is not enabled
 		return json_encode([
 			'success' => false,
 			'status'  => 0,
 			'msg'     => lang('Notifications.error_new_license_not_set_to_send_email'),
 		]);
-
-
 	}	
 
 	public function reset_license_search_action()

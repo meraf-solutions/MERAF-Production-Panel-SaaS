@@ -913,7 +913,7 @@ class Api extends ResourceController
             'email' => 'required|valid_email',
             'purchase_id_' => 'required|alpha_numeric_punct',
             'txn_id' => 'required|alpha_numeric_punct',
-            'product_ref' => 'required|alpha_numeric_punct',
+            'product_ref' => 'required',
         ];
 
         $validationMessages = [
@@ -956,7 +956,6 @@ class Api extends ResourceController
             ],
             'product_ref' => [
                 'required'              => 'The product reference field is required.',
-                'alpha_numeric_punct'   => 'The product reference field should only contains alphanumeric characters.',
             ],
         ];      
 
@@ -3085,7 +3084,7 @@ class Api extends ResourceController
                     'email' => 'required|valid_email',
                     'purchase_id_' => 'required|alpha_numeric_punct',
                     'txn_id' => 'required|alpha_numeric_punct',
-                    'product_ref' => 'required|alpha_numeric_punct',
+                    'product_ref' => 'required',
                 ];
 
                 $validationMessages = [

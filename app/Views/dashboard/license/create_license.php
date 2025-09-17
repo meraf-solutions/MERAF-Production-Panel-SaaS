@@ -572,7 +572,8 @@
                 var disallowedCharsRegex_forDate = /[~!#$%&*\_+=|:.]/;
                 var disallowedCharsRegex_forEmail   = /[~!#$%&*+=|:()\[\]]/;
                 var disallowedCharsRegex_forDomain  = /[^a-zA-Z0-9.-]/;
-                var disallowedCharsRegex_name = /[!@#$%^&*()+=[\]{};:'",<>/?`|0-9]/;
+                var disallowedCharsRegex_name = /[<>{}\\]/;
+                var disallowedCharsRegex_product = /[<>{}\\]/;
                 var allowedCharsRegex_name = /^[A-Za-z\u00C0-\u017F\s.'-]+$/u;
                 var disallowedCharsRegex_number  = /[^0-9]/;
 
