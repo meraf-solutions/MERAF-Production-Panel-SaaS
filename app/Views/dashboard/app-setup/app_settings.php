@@ -1109,14 +1109,19 @@ $isEnvatoSyncEnabled = $subscriptionChecker->isFeatureEnabled($userData->id, 'En
         });
 
         $('.mdi-lock-reset').click(function() {
-            var tooltipElement = $(this).closest('[data-bs-toggle="tooltip"]');
-            
-            var elementID = $(this).closest('.form-icon').find('.form-control').attr('id');
+            var clickedButton = $(this);
+            var tooltipElement = clickedButton.closest('[data-bs-toggle="tooltip"]');
+
+            var elementID = clickedButton.closest('.form-icon').find('.form-control').attr('id');
             var requestURL = '<?= base_url('app-settings/generate-new-key/') ?>' + elementID + '/8';
 
             var confirmReset = confirm("<?= lang('Pages.Confirm_Reset_Key') ?>");
 
             if (confirmReset) {
+                // Show loading state
+                var originalIcon = clickedButton.html();
+                clickedButton.html('<i class="mdi mdi-loading mdi-spin"></i>');
+
                 $.ajax({
                     url: requestURL,
                     method: 'GET',
@@ -1124,21 +1129,44 @@ $isEnvatoSyncEnabled = $subscriptionChecker->isFeatureEnabled($userData->id, 'En
                         tooltipElement.tooltip('hide');
 
                         let toastType = 'info';
+                        let toastMessage = '';
 
                         if (response.status == 1) {
                             $('#' + elementID).val(response.msg);
-                            toastType = 'success';
-                        } else if (response.status == 2) {    
+
+                            // Check if the key was auto-saved
+                            if (response.auto_saved === true) {
+                                toastType = 'success';
+                                toastMessage = `<?= lang('Pages.New_API_Key_Generated') ?> and automatically saved! <strong>${response.msg}</strong>`;
+                            } else if (response.auto_saved === false) {
+                                toastType = 'warning';
+                                if (response.save_error) {
+                                    toastMessage = `<?= lang('Pages.New_API_Key_Generated') ?> <strong>${response.msg}</strong><br><small class="text-warning">${response.save_error}</small>`;
+                                } else {
+                                    toastMessage = `<?= lang('Pages.New_API_Key_Generated') ?> <strong>${response.msg}</strong><br><small class="text-warning">Please click "Save Settings" to persist this change.</small>`;
+                                }
+                            } else {
+                                // Fallback for backwards compatibility
+                                toastType = 'info';
+                                toastMessage = `<?= lang('Pages.New_API_Key_Generated') ?> <strong>${response.msg}</strong><br><small class="text-info">Please click "Save Settings" to save this change.</small>`;
+                            }
+                        } else if (response.status == 2) {
                             toastType = 'info';
+                            toastMessage = response.msg || 'Key generation completed';
                         } else {
                             toastType = 'danger';
+                            toastMessage = response.msg || 'Key generation failed';
                         }
 
-                        showToast(toastType, '<?= lang('Pages.New_API_Key_Generated') ?>' + `<strong>${response.msg}</strong>`);
+                        showToast(toastType, toastMessage);
                     },
                     error: function (xhr, status, error) {
                         // Show error toast
 		                showToast('danger', '<?= lang('Pages.ajax_no_response') ?>' + status.toUpperCase() + ' ' + xhr.status);
+                    },
+                    complete: function () {
+                        // Restore original icon
+                        clickedButton.html(originalIcon);
                     }
                 });
             }

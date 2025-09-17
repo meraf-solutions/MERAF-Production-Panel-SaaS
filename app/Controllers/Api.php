@@ -45,6 +45,9 @@ class Api extends ResourceController
 
     public function __construct()
     {
+        // Load security helper for encryption and timing-safe functions
+        helper('security');
+
         // Initialize Models
         $this->PackageModel = new PackageModel();
         $this->UserModel = new UserModel();
@@ -67,11 +70,8 @@ class Api extends ResourceController
         // Get user-specific configurations
         $this->myConfig = $this->getUserConfig();
 
-        $this->ValidationSecretKey = $this->userID ? $this->myConfig['License_Validate_SecretKey'] : NULL;
-        $this->CreationSecretKey = $this->userID ? $this->myConfig['License_Create_SecretKey'] : NULL;
-        $this->ActivationSecretKey = $this->userID ? $this->myConfig['License_DomainDevice_Registration_SecretKey'] : NULL;
-        $this->ManageSecretKey = $this->userID ? $this->myConfig['Manage_License_SecretKey'] : NULL;
-        $this->GeneralSecretKey = $this->userID ? $this->myConfig['General_Info_SecretKey'] : NULL;
+        // Load and decrypt secret keys securely
+        $this->loadSecretKeys();
 
         // Set the locale dynamically based on user preference
         setMyLocale();
@@ -82,23 +82,43 @@ class Api extends ResourceController
         // Get the User-API-Key from the request header
         $request = \Config\Services::request();
         $apiKey = $request->getHeaderLine('User-API-Key');
-    
+
         // Log the received API key for debugging
         // log_message('debug', '[API] Received User-API-Key: ' . $apiKey);
-    
+
         // If the API key is not present, return null
         if (empty($apiKey)) {
             return null;
         }
-    
-        // Find the user with the corresponding API key
-        $user = $this->UserModel->where('api_key', $apiKey)->first();
-    
-        // Log the fetched user ID with the given User-API-Key for debugging
-        // log_message('debug', '[API] Fetched User ID: ' . $user->id);
 
-        // If the user is found, return their ID, otherwise return null
-        return $user ? $user->id : NULL;
+        // Get all users and check their API keys with encryption support
+        $users = $this->UserModel->where('api_key IS NOT NULL')->findAll();
+
+        foreach ($users as $user) {
+            try {
+                // First try to decrypt the stored API key and compare
+                if (!empty($user->api_key)) {
+                    $decryptedKey = $this->UserModel->getUserApiKey($user->id);
+
+                    // Use timing-safe comparison to prevent timing attacks
+                    if ($decryptedKey && timing_safe_equals($decryptedKey, $apiKey)) {
+                        // log_message('debug', '[API] Authenticated user ID: ' . $user->id);
+                        return $user->id;
+                    }
+                }
+            } catch (Exception $e) {
+                // If decryption fails, try direct comparison for backward compatibility
+                if (timing_safe_equals($user->api_key, $apiKey)) {
+                    // log_message('debug', '[API] Authenticated user ID (unencrypted): ' . $user->id);
+                    return $user->id;
+                }
+            }
+        }
+
+        // Log failed authentication attempt
+        log_message('warning', '[API] Failed to authenticate User-API-Key from IP: ' . $request->getIPAddress());
+
+        return null;
     }
     
 	protected function checkAdminAuthorization()
@@ -118,6 +138,55 @@ class Api extends ResourceController
     protected function getUserConfig()
     {
         return getMyConfig('', $this->userID);
+    }
+
+    /**
+     * Securely load and decrypt secret keys for the current user
+     * Supports both encrypted and plaintext keys for backward compatibility
+     */
+    protected function loadSecretKeys()
+    {
+        if (!$this->userID || !$this->myConfig) {
+            $this->ValidationSecretKey = NULL;
+            $this->CreationSecretKey = NULL;
+            $this->ActivationSecretKey = NULL;
+            $this->ManageSecretKey = NULL;
+            $this->GeneralSecretKey = NULL;
+            return;
+        }
+
+        try {
+            // Decrypt secret keys if they exist, with user-specific decryption
+            $this->ValidationSecretKey = !empty($this->myConfig['License_Validate_SecretKey'])
+                ? decrypt_secret_key($this->myConfig['License_Validate_SecretKey'], $this->userID)
+                : NULL;
+
+            $this->CreationSecretKey = !empty($this->myConfig['License_Create_SecretKey'])
+                ? decrypt_secret_key($this->myConfig['License_Create_SecretKey'], $this->userID)
+                : NULL;
+
+            $this->ActivationSecretKey = !empty($this->myConfig['License_DomainDevice_Registration_SecretKey'])
+                ? decrypt_secret_key($this->myConfig['License_DomainDevice_Registration_SecretKey'], $this->userID)
+                : NULL;
+
+            $this->ManageSecretKey = !empty($this->myConfig['Manage_License_SecretKey'])
+                ? decrypt_secret_key($this->myConfig['Manage_License_SecretKey'], $this->userID)
+                : NULL;
+
+            $this->GeneralSecretKey = !empty($this->myConfig['General_Info_SecretKey'])
+                ? decrypt_secret_key($this->myConfig['General_Info_SecretKey'], $this->userID)
+                : NULL;
+
+        } catch (Exception $e) {
+            log_message('error', "Failed to decrypt secret keys for user {$this->userID}: " . $e->getMessage());
+
+            // Fallback to plaintext keys if decryption fails
+            $this->ValidationSecretKey = $this->myConfig['License_Validate_SecretKey'] ?? NULL;
+            $this->CreationSecretKey = $this->myConfig['License_Create_SecretKey'] ?? NULL;
+            $this->ActivationSecretKey = $this->myConfig['License_DomainDevice_Registration_SecretKey'] ?? NULL;
+            $this->ManageSecretKey = $this->myConfig['Manage_License_SecretKey'] ?? NULL;
+            $this->GeneralSecretKey = $this->myConfig['General_Info_SecretKey'] ?? NULL;
+        }
     }    
 
     private function stripValue($value)
@@ -126,79 +195,163 @@ class Api extends ResourceController
         return preg_replace($pattern, '', $value);
     }
 
+    /**
+     * Authorize secret key with timing-safe comparison and enhanced security
+     * Prevents timing attacks and provides comprehensive validation
+     */
     private function authorizeSecretKey($type, $secretKey)
     {
-        if(!$this->userID) {
+        // Validate user authentication
+        if (!$this->userID) {
             $response = [
                 'result'     => 'error',
                 'message'    => 'Unauthorized access',
                 'error_code' => FORBIDDEN_ERROR
             ];
-    
             return $this->respondCreated($response);
         }
-        
+
+        // Sanitize and validate input
         $secretKey = $this->stripValue($secretKey);
-    
+
+        // Validate secret key format
+        if (!validate_license_key_format($secretKey)) {
+            log_message('warning', "Invalid secret key format from user {$this->userID}, IP: " . $this->request->getIPAddress());
+
+            $response = [
+                'result'     => 'error',
+                'message'    => 'Request failed due to configuration restrictions.',
+                'error_code' => FORBIDDEN_ERROR
+            ];
+            return $this->respondCreated($response);
+        }
+
         // Check if the set license manager is the built-in
         if ($this->myConfig['licenseManagerOnUse'] === 'slm') {
             $response = [
                 'result'     => 'error',
-                'message'    => 'Your request has failed. The configured license manager in the Production Panel is SLM WP Plugin. Please use the provided SLM WP Plugin API instead.',
+                'message'    => 'Request failed due to configuration restrictions.',
                 'error_code' => FORBIDDEN_ERROR
             ];
-    
             return $this->respondCreated($response);
         }
-    
-        // Authorization according to the type of API request
-        switch ($type) {
-            case 'create':
-                if ($secretKey === $this->CreationSecretKey) {
-                    return true;
-                }
-                break;
-        
-            case 'validate':
-                if ($secretKey === $this->ValidationSecretKey) {
-                    return true;
-                }
-                break;
-        
-            case 'activation':
-                if ($secretKey === $this->ActivationSecretKey) {
-                    return true;
-                }
-                break;
-        
-            case 'manage':
-                if ($secretKey === $this->ManageSecretKey) {
-                    return true;
-                }
-                break;
-        
-            case 'general':
-                if ($secretKey === $this->GeneralSecretKey) {
-                    return true;
-                }
-                break;
-        
-            default:
-                $response = [
-                    'result'     => 'error',
-                    'message'    => 'Invalid API key',
-                    'error_code' => FORBIDDEN_ERROR
-                ];
-                return $this->respondCreated($response);
+
+        // Get the expected secret key based on request type
+        $expectedKey = $this->getExpectedSecretKey($type);
+
+        if ($expectedKey === null) {
+            log_message('warning', "Invalid API request type '{$type}' from user {$this->userID}, IP: " . $this->request->getIPAddress());
+
+            $response = [
+                'result'     => 'error',
+                'message'    => 'Request failed due to configuration restrictions.',
+                'error_code' => FORBIDDEN_ERROR
+            ];
+            return $this->respondCreated($response);
         }
-    
+
+        // Timing-safe secret key validation
+        if (timing_safe_equals($expectedKey, $secretKey)) {
+            // Log successful authentication for monitoring
+            log_message('info', "Successful API authentication for type '{$type}', user {$this->userID}, IP: " . $this->request->getIPAddress());
+            return true;
+        }
+
+        // Log failed authentication attempt
+        log_message('warning', "Failed API authentication for type '{$type}', user {$this->userID}, IP: " . $this->request->getIPAddress());
+
         $response = [
             'result'     => 'error',
-            'message'    => 'Invalid API key',
+            'message'    => 'Request failed due to configuration restrictions.',
             'error_code' => FORBIDDEN_ERROR
         ];
     
         return $this->respondCreated($response);
+    }
+
+    /**
+     * Get the expected secret key for a given API request type
+     *
+     * @param string $type The API request type
+     * @return string|null The expected secret key or null if type is invalid
+     */
+    private function getExpectedSecretKey(string $type): ?string
+    {
+        switch ($type) {
+            case 'create':
+                return $this->CreationSecretKey;
+
+            case 'validate':
+                return $this->ValidationSecretKey;
+
+            case 'activation':
+                return $this->ActivationSecretKey;
+
+            case 'manage':
+                return $this->ManageSecretKey;
+
+            case 'general':
+                return $this->GeneralSecretKey;
+
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Validate and sanitize API inputs with comprehensive security checks
+     *
+     * @param array $inputs Array of input values to validate
+     * @param array $rules Validation rules for each input
+     * @return array|bool Sanitized inputs or false if validation fails
+     */
+    protected function validateAndSanitizeInputs(array $inputs, array $rules = []): array|bool
+    {
+        $sanitizedInputs = [];
+
+        foreach ($inputs as $key => $value) {
+            // Apply sanitization
+            $sanitized = sanitize_input($value);
+
+            // Apply specific validation rules if defined
+            if (isset($rules[$key])) {
+                $rule = $rules[$key];
+
+                switch ($rule) {
+                    case 'license_key':
+                        if (!validate_license_key_format($sanitized)) {
+                            log_message('warning', "Invalid license key format for '{$key}' from user {$this->userID}");
+                            return false;
+                        }
+                        break;
+
+                    case 'domain':
+                        if (!validate_domain_format($sanitized)) {
+                            log_message('warning', "Invalid domain format for '{$key}' from user {$this->userID}");
+                            return false;
+                        }
+                        break;
+
+                    case 'device':
+                        if (!validate_device_identifier($sanitized)) {
+                            log_message('warning', "Invalid device identifier format for '{$key}' from user {$this->userID}");
+                            return false;
+                        }
+                        break;
+
+                    case 'email':
+                        if (!filter_var($sanitized, FILTER_VALIDATE_EMAIL)) {
+                            log_message('warning', "Invalid email format for '{$key}' from user {$this->userID}");
+                            return false;
+                        }
+                        break;
+                }
+            }
+
+            $sanitizedInputs[$key] = $sanitized;
+        }
+
+        return $sanitizedInputs;
     }
 
     /**
@@ -3190,5 +3343,322 @@ class Api extends ResourceController
 		$packageListData = $this->PackageModel->orderBy('sort_order', 'ASC')->findAll();
 
         return $this->respondCreated($packageListData);
-    }     
+    }
+
+    /**
+     * GET /api/dashboard-data
+     * Retrieve comprehensive dashboard data for authenticated user
+     * Authentication: User API Key (header)
+     */
+    public function getDashboardData()
+    {
+        // Check if user is authenticated via User-API-Key
+        if (!$this->userID) {
+            return $this->respond([
+                'result' => 'error',
+                'message' => 'Authentication required. Please provide User-API-Key header.',
+                'code' => 'AUTHENTICATION_REQUIRED'
+            ], 401);
+        }
+
+        try {
+            // Get user details
+            $user = $this->UserModel->find($this->userID);
+            if (!$user) {
+                return $this->respond([
+                    'result' => 'error',
+                    'message' => 'User not found.',
+                    'code' => 'USER_NOT_FOUND'
+                ], 404);
+            }
+
+            // Get user's licenses with statistics
+            $licenses = $this->LicensesModel->where('owner_id', $this->userID)->findAll();
+
+            // Calculate statistics
+            $stats = [
+                'total_licenses' => count($licenses),
+                'active_licenses' => 0,
+                'expired_licenses' => 0,
+                'blocked_licenses' => 0,
+                'pending_licenses' => 0
+            ];
+
+            foreach ($licenses as $license) {
+                switch ($license['license_status']) {
+                    case 'active':
+                        $stats['active_licenses']++;
+                        break;
+                    case 'expired':
+                        $stats['expired_licenses']++;
+                        break;
+                    case 'blocked':
+                        $stats['blocked_licenses']++;
+                        break;
+                    case 'pending':
+                        $stats['pending_licenses']++;
+                        break;
+                }
+            }
+
+            // Get recent activities (last 10)
+            $recentActivities = $this->LicenseLogsModel
+                ->where('owner_id', $this->userID)
+                ->orderBy('time', 'DESC')
+                ->limit(10)
+                ->findAll();
+
+            // Decrypt user API key if needed
+            $decryptedApiKey = $this->UserModel->getUserApiKey($this->userID);
+
+            return $this->respond([
+                'result' => 'success',
+                'data' => [
+                    'user' => [
+                        'id' => $user->id,
+                        'username' => $user->username,
+                        'email' => $user->email,
+                        'first_name' => $user->first_name,
+                        'last_name' => $user->last_name,
+                        'api_key' => $decryptedApiKey
+                    ],
+                    'licenses' => array_map(function($license) {
+                        return [
+                            'id' => $license['id'],
+                            'license_key' => $license['license_key'],
+                            'status' => $license['license_status'],
+                            'type' => $license['license_type'],
+                            'customer_email' => $license['email'],
+                            'product_ref' => $license['product_ref'],
+                            'date_created' => $license['date_created']
+                        ];
+                    }, $licenses),
+                    'statistics' => $stats,
+                    'recent_activities' => array_map(function($activity) {
+                        return [
+                            'license_key' => $activity['license_key'],
+                            'action' => $activity['action_type'],
+                            'details' => $activity['details'],
+                            'timestamp' => $activity['time']
+                        ];
+                    }, $recentActivities)
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            log_message('error', '[API] Error getting dashboard data: ' . $e->getMessage());
+            return $this->respond([
+                'result' => 'error',
+                'message' => 'An error occurred while retrieving dashboard data.',
+                'code' => 'INTERNAL_ERROR'
+            ], 500);
+        }
+    }
+
+    /**
+     * POST /api/user/licenses
+     * Create license for authenticated user's tenant
+     * Authentication: User API Key (header)
+     */
+    public function createUserLicense()
+    {
+        // Check if user is authenticated via User-API-Key
+        if (!$this->userID) {
+            return $this->respond([
+                'result' => 'error',
+                'message' => 'Authentication required. Please provide User-API-Key header.',
+                'code' => 'AUTHENTICATION_REQUIRED'
+            ], 401);
+        }
+
+        try {
+            $input = $this->request->getJSON(true);
+
+            // Validate required fields
+            $requiredFields = ['license_type', 'license_status', 'first_name', 'last_name', 'email',
+                             'max_allowed_domains', 'max_allowed_devices', 'product_ref'];
+
+            foreach ($requiredFields as $field) {
+                if (!isset($input[$field]) || empty($input[$field])) {
+                    return $this->respond([
+                        'result' => 'error',
+                        'message' => "Required field missing: {$field}",
+                        'code' => 'VALIDATION_ERROR'
+                    ], 400);
+                }
+            }
+
+            // Generate license key
+            helper('license');
+            $licenseKey = $input['license_key'] ?? generateLicenseKey();
+
+            // Prepare license data with owner_id for tenant isolation
+            $licenseData = [
+                'owner_id' => $this->userID,
+                'license_key' => $licenseKey,
+                'license_status' => $input['license_status'],
+                'license_type' => $input['license_type'],
+                'first_name' => $input['first_name'],
+                'last_name' => $input['last_name'],
+                'email' => $input['email'],
+                'max_allowed_domains' => (int)$input['max_allowed_domains'],
+                'max_allowed_devices' => (int)$input['max_allowed_devices'],
+                'product_ref' => $input['product_ref'],
+                'company_name' => $input['company_name'] ?? '',
+                'txn_id' => $input['txn_id'] ?? 'API-' . time(),
+                'purchase_id_' => $input['purchase_id_'] ?? 'API-' . time(),
+                'date_created' => Time::now()->toDateTimeString(),
+                'date_expiry' => $input['date_expiry'] ?? null,
+                'current_ver' => $input['current_ver'] ?? '1.0.0',
+                'until' => $input['until'] ?? null
+            ];
+
+            // Save license
+            if ($this->LicensesModel->insert($licenseData)) {
+                return $this->respond([
+                    'result' => 'success',
+                    'message' => 'License created successfully.',
+                    'license_key' => $licenseKey,
+                    'code' => 200
+                ]);
+            } else {
+                return $this->respond([
+                    'result' => 'error',
+                    'message' => 'Failed to create license.',
+                    'code' => 'CREATE_FAILED'
+                ], 500);
+            }
+
+        } catch (\Exception $e) {
+            log_message('error', '[API] Error creating user license: ' . $e->getMessage());
+            return $this->respond([
+                'result' => 'error',
+                'message' => 'An error occurred while creating the license.',
+                'code' => 'INTERNAL_ERROR'
+            ], 500);
+        }
+    }
+
+    /**
+     * GET /api/user/settings
+     * Retrieve user's application settings
+     * Authentication: User API Key (header)
+     */
+    public function getUserSettings()
+    {
+        // Check if user is authenticated via User-API-Key
+        if (!$this->userID) {
+            return $this->respond([
+                'result' => 'error',
+                'message' => 'Authentication required. Please provide User-API-Key header.',
+                'code' => 'AUTHENTICATION_REQUIRED'
+            ], 401);
+        }
+
+        try {
+            // Get all user settings
+            $settings = $this->UserSettingsModel->where('user_id', $this->userID)->findAll();
+
+            // Format settings as key-value pairs, decrypting secret keys
+            $formattedSettings = [];
+            foreach ($settings as $setting) {
+                $value = $setting['setting_value'];
+
+                // Decrypt secret keys but keep other settings as-is
+                if (strpos($setting['setting_name'], '_secret_key') !== false && is_encrypted_key($value)) {
+                    $value = decrypt_secret_key($value, $this->userID);
+                }
+
+                $formattedSettings[$setting['setting_name']] = $value;
+            }
+
+            return $this->respond([
+                'result' => 'success',
+                'settings' => $formattedSettings
+            ]);
+
+        } catch (\Exception $e) {
+            log_message('error', '[API] Error getting user settings: ' . $e->getMessage());
+            return $this->respond([
+                'result' => 'error',
+                'message' => 'An error occurred while retrieving settings.',
+                'code' => 'INTERNAL_ERROR'
+            ], 500);
+        }
+    }
+
+    /**
+     * POST /api/user/settings
+     * Update user's application settings
+     * Authentication: User API Key (header)
+     */
+    public function updateUserSettings()
+    {
+        // Check if user is authenticated via User-API-Key
+        if (!$this->userID) {
+            return $this->respond([
+                'result' => 'error',
+                'message' => 'Authentication required. Please provide User-API-Key header.',
+                'code' => 'AUTHENTICATION_REQUIRED'
+            ], 401);
+        }
+
+        try {
+            $input = $this->request->getJSON(true);
+
+            if (empty($input)) {
+                return $this->respond([
+                    'result' => 'error',
+                    'message' => 'No settings provided.',
+                    'code' => 'VALIDATION_ERROR'
+                ], 400);
+            }
+
+            $updatedCount = 0;
+            $errors = [];
+
+            // Update each setting
+            foreach ($input as $settingName => $settingValue) {
+                try {
+                    // Use UserSettingsModel's setUserSetting method which handles encryption
+                    if ($this->UserSettingsModel->setUserSetting($settingName, $settingValue, $this->userID)) {
+                        $updatedCount++;
+                    } else {
+                        $errors[] = "Failed to update setting: {$settingName}";
+                    }
+                } catch (\Exception $e) {
+                    $errors[] = "Error updating {$settingName}: " . $e->getMessage();
+                }
+            }
+
+            if ($updatedCount > 0) {
+                $response = [
+                    'result' => 'success',
+                    'message' => "Successfully updated {$updatedCount} setting(s).",
+                    'updated_count' => $updatedCount
+                ];
+
+                if (!empty($errors)) {
+                    $response['warnings'] = $errors;
+                }
+
+                return $this->respond($response);
+            } else {
+                return $this->respond([
+                    'result' => 'error',
+                    'message' => 'No settings were updated.',
+                    'errors' => $errors,
+                    'code' => 'UPDATE_FAILED'
+                ], 400);
+            }
+
+        } catch (\Exception $e) {
+            log_message('error', '[API] Error updating user settings: ' . $e->getMessage());
+            return $this->respond([
+                'result' => 'error',
+                'message' => 'An error occurred while updating settings.',
+                'code' => 'INTERNAL_ERROR'
+            ], 500);
+        }
+    }
 }

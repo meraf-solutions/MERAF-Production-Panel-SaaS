@@ -1,65 +1,82 @@
-# MERAF Production Panel - Architecture Documentation
+# MERAF Production Panel SaaS - Architecture Documentation
 
 ## System Overview
 
-The MERAF Production Panel is a comprehensive license management system built on CodeIgniter 4 framework. It provides a centralized platform for managing digital licenses, user authentication, and product lifecycle management.
+The MERAF Production Panel SaaS is a comprehensive multi-tenant license management system built on CodeIgniter 4 framework. It provides a scalable SaaS platform for managing digital licenses with complete tenant isolation, user authentication, subscription management, and product lifecycle management across multiple customers.
 
-## High-Level Architecture
+## Multi-Tenant SaaS Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Presentation Layer                       │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │   Dashboard UI  │  │   API Endpoints │  │  CLI Tools  │  │
-│  │   (Views)       │  │   (REST API)    │  │   (Spark)   │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────────────────────────────────────┐
-│                    Business Logic Layer                     │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │   Controllers   │  │    Services     │  │   Helpers   │  │
-│  │   (MVC)         │  │   (Business)    │  │  (Utilities)│  │
-│  └─────────────────┘  └─────────────────┘  └─────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────────────────────────────────────┐
-│                    Data Access Layer                        │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │     Models      │  │   Migrations    │  │   Database  │  │
-│  │   (ORM)         │  │   (Schema)      │  │  (Storage)  │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                        SaaS Presentation Layer                      │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐  │
+│  │  Tenant Portal  │  │   Multi-Tenant  │  │  Admin Dashboard    │  │
+│  │  (User Views)   │  │   REST API      │  │  (Global Mgmt)      │  │
+│  │  User-API-Key   │  │  User-API-Key   │  │  Super Admin        │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+┌─────────────────────────────────────────────────────────────────────┐
+│                       Multi-Tenant Business Layer                   │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐  │
+│  │  Tenant Service │  │ Subscription    │  │  Notification       │  │
+│  │  Isolation      │  │ Management      │  │  Service            │  │
+│  │  owner_id       │  │ Billing         │  │  Multi-tenant       │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+┌─────────────────────────────────────────────────────────────────────┐
+│                       Multi-Tenant Data Layer                       │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐  │
+│  │  Tenant-Aware   │  │  User Settings  │  │  Subscription       │  │
+│  │  Models         │  │  Per-Tenant     │  │  Management         │  │
+│  │  owner_id FK    │  │  Encryption     │  │  billing, packages  │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Core Components
+## Core SaaS Components
 
-### 1. License Management System
+### 1. Multi-Tenant License Management System
 
-**Purpose**: Central system for managing digital product licenses
+**Purpose**: Tenant-isolated digital product license management with complete data separation
 
 **Key Components**:
-- **License Creation**: Generate unique license keys for products
-- **License Validation**: Verify license authenticity and status
-- **Device/Domain Registration**: Track where licenses are activated
-- **License Lifecycle**: Manage activation, renewal, expiration
+- **Tenant Isolation**: Every license operation scoped to `owner_id`
+- **License Creation**: Generate unique license keys per tenant
+- **License Validation**: Verify license authenticity with tenant context
+- **Device/Domain Registration**: Track activations per tenant
+- **License Lifecycle**: Manage activation, renewal, expiration per tenant
 
-**Data Flow**:
+**Multi-Tenant Data Flow**:
 ```
-API Request → Authentication → License Validation → Database Query → Response
+API Request → User-API-Key Authentication → Tenant Resolution → License Operation → Tenant Database → Response
 ```
 
-### 2. Authentication & Security System
+### 2. Subscription Management System
 
-**Purpose**: Secure user access and API protection
+**Purpose**: SaaS billing and package management per tenant
+
+**Key Components**:
+- **Package Management**: Define subscription tiers and limits
+- **Billing Integration**: Automated billing cycles and payments
+- **Usage Tracking**: Monitor tenant resource consumption
+- **Trial Management**: Free trial and conversion tracking
+- **Payment Processing**: Secure payment handling with webhooks
+
+### 3. Multi-Tenant Authentication & Security System
+
+**Purpose**: Secure tenant access and API protection with complete isolation
 
 **Components**:
-- **CodeIgniter Shield**: User authentication framework
-- **IP Blocking**: Prevent access from malicious IPs  
-- **API Key Authorization**: Timing-safe secret key validation with AES-256-GCM encryption
-- **Session Management**: Handle user sessions securely
-- **Security Headers**: Comprehensive browser-level protection
-- **Rate Limiting**: Tiered throttling by endpoint sensitivity
+- **CodeIgniter Shield**: Multi-tenant user authentication framework
+- **User-API-Key Authentication**: 6-character tenant-specific API keys
+- **Dual Authentication Layers**: Admin secret keys + tenant User-API-Keys
+- **IP Blocking**: Prevent access from malicious IPs per tenant
+- **API Key Authorization**: Timing-safe secret key validation with user-specific AES-256-GCM encryption
+- **Session Management**: Handle tenant sessions securely
+- **Security Headers**: Comprehensive browser-level protection with tenant awareness
+- **Rate Limiting**: Tiered throttling by endpoint sensitivity and tenant
 - **Input Validation**: Multi-layer sanitization and format validation
 
 **Security Layers** ✅ **ENTERPRISE-GRADE**:
@@ -72,13 +89,44 @@ API Request → Authentication → License Validation → Database Query → Res
 7. **Secret Key Encryption**: AES-256-GCM encryption at rest (FULLY IMPLEMENTED)
 8. **IP-based Security**: SHA-256 hashing with daily salt rotation
 
-### 3. Data Management System
+### 4. Multi-Tenant Data Management System
 
-**Purpose**: Persistent data storage and retrieval
+**Purpose**: Tenant-isolated persistent data storage and retrieval
 
-**Database Schema**:
+**Multi-Tenant Database Schema**:
 ```
-licenses (Primary Table)
+users (Primary Tenant Table)
+├── id (Primary Key)
+├── username, email, password
+├── api_key (encrypted per user)
+├── first_name, last_name
+└── created_at, updated_at
+
+subscriptions (SaaS Billing)
+├── id (Primary Key)
+├── user_id (FK → users.id)
+├── package_id (FK → packages.id)
+├── subscription_status
+├── start_date, end_date
+└── payment_details
+
+packages (SaaS Tiers)
+├── id (Primary Key)
+├── package_name, description
+├── max_licenses, max_domains, max_devices
+├── billing_amount, billing_interval
+└── features_json
+
+user_settings (Tenant Configuration)
+├── id (Primary Key)
+├── user_id (FK → users.id) [TENANT ISOLATION]
+├── setting_name
+├── setting_value (encrypted if secret)
+└── timestamps
+
+licenses (Tenant-Scoped Licenses)
+├── id (Primary Key)
+├── owner_id (FK → users.id) [TENANT ISOLATION]
 ├── license_key (unique identifier)
 ├── max_allowed_domains/devices
 ├── license_status (pending/active/blocked/expired)
@@ -86,17 +134,23 @@ licenses (Primary Table)
 ├── customer information
 └── timestamps
 
-license_registered_domains
+license_registered_domains (Tenant-Scoped)
+├── id (Primary Key)
+├── owner_id (FK → users.id) [TENANT ISOLATION]
 ├── license_key (FK)
 ├── registered_domain
 └── registration_date
 
-license_registered_devices  
+license_registered_devices (Tenant-Scoped)
+├── id (Primary Key)
+├── owner_id (FK → users.id) [TENANT ISOLATION]
 ├── license_key (FK)
 ├── registered_device
 └── registration_date
 
-license_logs
+license_logs (Tenant-Scoped)
+├── id (Primary Key)
+├── owner_id (FK → users.id) [TENANT ISOLATION]
 ├── license_key (FK)
 ├── action_type
 ├── details
@@ -135,16 +189,31 @@ class LicensesModel extends Model
 - Timezone handling (`setMyTimezone()`)
 - Internationalization (`setMyLocale()`)
 
-### 4. API Design Pattern
+### 4. Multi-Tenant API Design Pattern
 
-**RESTful API Structure**:
+**Dual Authentication API Structure**:
+
+**Admin API Endpoints** (Secret Key Authentication):
 ```
-POST /api/license/create     → License creation
-POST /api/license/validate   → License validation  
-POST /api/license/activate   → Device/domain registration
-POST /api/license/manage     → License management operations
-GET  /api/info/general       → System information
+POST /api/license/create/{secret_key}     → Admin license creation
+POST /api/license/verify/{secret_key}     → License validation
+GET  /api/license/register/{type}/{name}/{secret_key}/{license_key} → Device/domain registration
+GET  /api/license/all/{secret_key}        → Admin license management
+GET  /api/product/all                     → Product information
 ```
+
+**Tenant API Endpoints** (User-API-Key Header Authentication):
+```
+GET  /api/dashboard-data                  → Tenant dashboard data
+POST /api/user/licenses                   → Tenant license creation
+GET  /api/user/settings                   → Tenant settings retrieval
+POST /api/user/settings                   → Tenant settings update
+```
+
+**Authentication Patterns**:
+- **Admin Operations**: URL path secret key authentication
+- **Tenant Operations**: `User-API-Key: A1B2C3` header authentication
+- **Multi-Tenant Isolation**: All tenant operations automatically scoped to authenticated user's `owner_id`
 
 ## Component Interactions
 
@@ -240,34 +309,35 @@ External Request
 - `APIThrottle` - Tiered rate limiting by endpoint sensitivity
 - `IPBlockFilter` - Malicious IP prevention
 
-### AES-256-GCM Encryption Architecture ✅ **FULLY IMPLEMENTED**
+### Multi-Tenant AES-256-GCM Encryption Architecture ✅ **FULLY IMPLEMENTED**
 
-**Complete Implementation Overview**:
-The encryption system now provides comprehensive protection across all components:
-- ✅ **Installation Security**: Unique encryption keys per installation
-- ✅ **Runtime Protection**: Automatic encryption/decryption with zero operational impact
-- ✅ **Plugin Compatibility**: Fixed WooCommerce and SLM plugin integrations
-- ✅ **Internal Security**: Resolved built-in license manager vulnerability
-- ✅ **CSP Enhancement**: Updated Content Security Policy for CDN compatibility
+**Multi-Tenant Encryption Overview**:
+The SaaS encryption system provides comprehensive protection with complete tenant isolation:
+- ✅ **User-Specific Encryption Keys**: Unique encryption keys per tenant for complete data isolation
+- ✅ **User API Key Encryption**: 6-character alphanumeric keys encrypted while preserving format
+- ✅ **Auto-Save Functionality**: Generated keys automatically encrypted and saved to database
+- ✅ **UserSettings Integration**: Seamless integration with `UserSettingsModel->setUserSetting()`
+- ✅ **Timing-Safe Authentication**: Constant-time comparison for encrypted key validation
+- ✅ **Backward Compatibility**: Seamless migration from plaintext to encrypted keys
 
-**Encryption Infrastructure**:
+**Multi-Tenant Encryption Infrastructure**:
 ```
-Installation Process → Unique Encryption Key Generation → app/Config/Encryption.php
+User Registration → User-Specific Encryption Key Derivation → SHA-256 with user-specific salt
                                     ↓
-API Secret Keys (at rest) → AES-256-GCM Encryption → Base64 Database Storage
+User API Keys & Settings → User-Specific AES-256-GCM Encryption → user_settings table
                                     ↓
-Runtime API Operations ← Automatic Decryption ← Encrypted Key Retrieval
+Tenant API Operations ← User-Specific Decryption ← getUserApiKey($userID)
                                     ↓
-External Plugin APIs ← Decrypted Keys ← Smart Detection & Decryption
+Multi-Tenant Authentication ← Timing-Safe Comparison ← Encrypted Key Validation
 ```
 
-**Key Management Lifecycle**:
-1. **Installation**: Unique encryption keys generated in `action_secure.php`, secret keys encrypted during `InitializeNewUser::initializeSecretKeys()`
-2. **Runtime**: Automatic decryption in `Api::loadSecretKey()` with smart detection
-3. **Settings**: Real-time encryption during save in `Home::app_settings_action()`
-4. **Display**: Secure decryption for UI in `Home::decryptSecretKeysForDisplay()`
-5. **Plugin Integration**: Automatic decryption for external plugins in `LicenseManager.php`
-6. **Security Fix**: Resolved vulnerability in built-in license manager (line 1233)
+**Multi-Tenant Key Management Lifecycle**:
+1. **User Registration**: User-specific encryption keys derived using SHA-256 with user ID salt
+2. **User API Key Generation**: 6-character keys generated and automatically encrypted via `UserSettingsModel->setUserSetting()`
+3. **Runtime Authentication**: User-specific decryption in `Api::getUserID()` with timing-safe comparison
+4. **Settings Management**: Real-time encryption during save in tenant settings operations
+5. **Display**: Secure decryption for UI in user dashboard and settings pages
+6. **Multi-Tenant Isolation**: All encryption operations scoped to specific user ID for complete data separation
 
 **Encryption Specifications**:
 - **Algorithm**: AES-256-GCM (Authenticated Encryption with Additional Data)
@@ -290,19 +360,22 @@ Login Request → Shield Authentication → Session Creation → Dashboard Acces
          User Verification → Database Query → Session Storage
 ```
 
-## Scalability Considerations
+## SaaS Scalability Considerations
 
-### Horizontal Scaling Points
-1. **API Layer**: Stateless design allows load balancing
-2. **Database Layer**: Read replicas for license validation
-3. **Caching Layer**: Session and configuration caching
-4. **File Storage**: Writable directory can be moved to shared storage
+### Multi-Tenant Horizontal Scaling Points
+1. **API Layer**: Stateless tenant-aware design allows load balancing with session affinity
+2. **Database Layer**: Read replicas for license validation with tenant sharding support
+3. **Caching Layer**: Tenant-specific session and configuration caching
+4. **File Storage**: User-data directories can be distributed across storage nodes
+5. **Subscription Processing**: Async billing queue processing for payment handling
 
-### Performance Optimizations
-1. **Output Compression**: Gzip compression enabled in BaseController
-2. **Timezone Optimization**: Cached timezone detection
-3. **Database Indexing**: License keys and email fields indexed
-4. **Query Optimization**: Efficient model relationships
+### SaaS Performance Optimizations
+1. **Tenant Data Isolation**: Efficient `owner_id` indexing for fast tenant data retrieval
+2. **Database Sharding**: Tenant data can be distributed across multiple databases
+3. **Caching Strategy**: Redis/Memcached with tenant-specific cache keys
+4. **API Rate Limiting**: Per-tenant rate limiting to prevent resource abuse
+5. **Subscription Processing**: Background job processing for billing operations
+6. **License Validation**: Optimized queries with composite indexes on `owner_id` + `license_key`
 
 ## Integration Architecture
 
@@ -327,21 +400,33 @@ MERAF Panel
 
 ## Deployment Architecture
 
-### File Structure in Production
+### SaaS File Structure in Production
 ```
 public_html/                    (Document Root)
 ├── public/                     (Web accessible files)
-├── app/                        (Application logic)
+├── app/                        (Multi-tenant application logic)
+│   ├── Controllers/Admin/      (Super admin controllers)
+│   ├── Models/                 (Tenant-aware models)
+│   └── Views/                  (Multi-tenant views)
 ├── system/                     (Framework core)
 ├── writable/                   (Logs, cache, uploads)
+│   └── tenant-data/{user-id}/  (Per-tenant data directories)
 ├── vendor/                     (Composer dependencies)
 ├── tests/                      (Test suites)
-└── user-data/                  (Custom user data)
+└── subscription-data/          (Billing and payment data)
 ```
 
-### Environment Configuration
-- **Development**: Local development with debug enabled
-- **Production**: Optimized for performance and security
-- **Testing**: Separate database and configuration
+### SaaS Environment Configuration
+- **Development**: Multi-tenant local development with debug enabled
+- **Staging**: Production-like environment for testing subscription flows
+- **Production**: Optimized for multi-tenant performance, security, and billing
+- **Testing**: Isolated tenant testing with separate databases
 
-This architecture provides a robust, scalable foundation for license management while maintaining security and performance standards.
+### SaaS-Specific Features
+- **Subscription Management**: Automated billing, trial management, package upgrades
+- **Tenant Isolation**: Complete data separation with `owner_id` foreign keys
+- **Multi-Tenant APIs**: Dual authentication for admin and tenant operations
+- **Usage Analytics**: Per-tenant resource consumption tracking
+- **Notification System**: Multi-tenant push notifications and email alerts
+
+This multi-tenant SaaS architecture provides a robust, scalable foundation for license management as a service while maintaining complete tenant isolation, security, and performance standards.

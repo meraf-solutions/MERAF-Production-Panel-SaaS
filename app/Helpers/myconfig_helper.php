@@ -107,6 +107,19 @@ if (!function_exists('getMyConfig')) {
 
                 $settings = $result->getResult();
 
+                // Load security helper for decryption
+                helper('security');
+
+                // List of secret keys that should be decrypted for display
+                $secretKeys = [
+                    'License_Create_SecretKey',
+                    'License_Validate_SecretKey',
+                    'License_DomainDevice_Registration_SecretKey',
+                    'Manage_License_SecretKey',
+                    'General_Info_SecretKey',
+                    'reCAPTCHA_Secret_Key'
+                ];
+
                 // Process each user setting and merge it into the configuration array
                 foreach ($settings as $setting) {
                     $class = $setting->class;
@@ -115,7 +128,24 @@ if (!function_exists('getMyConfig')) {
                         $myConfig[$class] = [];
                     }
 
-                    $myConfig[$class][$setting->key] = $setting->value;
+                    $value = $setting->value;
+
+                    // Decrypt secret keys for display purposes
+                    if (in_array($setting->key, $secretKeys) && !empty($value)) {
+                        try {
+                            // Check if the value is encrypted and decrypt it
+                            if (is_encrypted_key($value)) {
+                                $value = decrypt_secret_key($value, $userID);
+                                log_message('debug', "Decrypted secret key '{$setting->key}' for display to user {$userID}");
+                            }
+                        } catch (Exception $e) {
+                            // If decryption fails, keep the original value (backward compatibility)
+                            log_message('warning', "Failed to decrypt secret key '{$setting->key}' for user {$userID}: " . $e->getMessage());
+                            $value = $setting->value;
+                        }
+                    }
+
+                    $myConfig[$class][$setting->key] = $value;
                 }
 
             } catch (\Exception $e) {
@@ -140,13 +170,37 @@ if (!function_exists('generateApiKey')) {
 
         // // Generate random bytes using a CSPRNG
         // $randomBytes = random_bytes($length);
-    
+
         // // Encode the random bytes in Base64 format
         // $apiKey = base64_encode($randomBytes);
-    
+
         // // Optionally, you can remove any characters that are not suitable for an API key
         // $apiKey = str_replace(['+', '/', '=', '-', '_'], [''], $apiKey);
-    
+
+        return $apiKey;
+    }
+}
+
+if (!function_exists('generateUserApiKey')) {
+    /**
+     * Generate a 6-character alphanumeric user API key
+     * Uses uppercase letters and numbers for better readability
+     *
+     * @return string 6-character alphanumeric key
+     */
+    function generateUserApiKey()
+    {
+        // Character set: A-Z and 0-9 (excluding easily confused characters like 0, O, I, 1)
+        $characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        $keyLength = 6;
+        $apiKey = '';
+
+        // Generate cryptographically secure random key
+        for ($i = 0; $i < $keyLength; $i++) {
+            $randomIndex = random_int(0, strlen($characters) - 1);
+            $apiKey .= $characters[$randomIndex];
+        }
+
         return $apiKey;
     }
 }

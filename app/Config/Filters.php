@@ -20,6 +20,7 @@ use App\Filters\APIThrottle;
 use App\Filters\FirstLoginFilter;
 use App\Filters\Trim;
 use App\Filters\NotificationReadFilter;
+use App\Filters\SecurityHeaders;
 use App\Services\ModuleScanner;
 
 class Filters extends BaseFilters
@@ -49,6 +50,7 @@ class Filters extends BaseFilters
         'ipblock'       => IPBlockFilter::class,
         'trim'          => Trim::class,
         'notificationRead' => NotificationReadFilter::class,
+        'security_headers' => SecurityHeaders::class,
     ];
 
     /**
@@ -81,6 +83,7 @@ class Filters extends BaseFilters
         ],
         'after' => [
             'toolbar',
+            'security_headers',
         ],
     ];
 

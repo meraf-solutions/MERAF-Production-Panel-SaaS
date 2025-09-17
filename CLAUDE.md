@@ -4,37 +4,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is the MERAF Production Panel, a CodeIgniter 4-based web application for managing digital licenses and product changelogs. The application handles license validation, user authentication, and various administrative features for digital product management.
+This is the MERAF Production Panel SaaS, a CodeIgniter 4-based multi-tenant web application for managing digital licenses as a service. The application handles license validation, subscription management, user authentication, billing, and various administrative features for digital product management across multiple tenants with complete data isolation.
 
 ## Architecture
 
-### Framework Structure
+### SaaS Framework Structure
 - **Framework**: CodeIgniter 4 (PHP 8.1+)
-- **Architecture**: MVC (Model-View-Controller) pattern
+- **Architecture**: Multi-tenant MVC (Model-View-Controller) pattern
 - **Main entry point**: `public/index.php` (web) and `spark` (CLI)
 - **Configuration**: `app/Config/` directory contains all configuration files
+- **Multi-tenancy**: Complete tenant isolation with `owner_id` foreign keys
+- **Subscription System**: Integrated billing and package management
 
-### Directory Structure
-- `app/` - Main application code
-  - `Controllers/` - HTTP request handlers (Api.php, Home.php, LicenseManager.php, etc.)
-  - `Models/` - Database interaction layer (LicensesModel.php, UserModel.php, etc.)
-  - `Views/` - Template files organized by feature
+### SaaS Directory Structure
+- `app/` - Multi-tenant application code
+  - `Controllers/` - HTTP request handlers (Api.php, Home.php, etc.)
+  - `Models/` - Tenant-aware database layer (LicensesModel.php, UserModel.php, UserSettingsModel.php, SubscriptionModel.php, etc.)
+  - `Views/` - Multi-tenant template files organized by feature
   - `Config/` - Application configuration
-  - `Database/Migrations/` - Database schema changes
+  - `Database/Migrations/` - Multi-tenant database schema changes
   - `Database/Seeds/` - Test data seeding
-  - `Helpers/` - Custom helper functions
+  - `Helpers/` - Custom helper functions (including security_helper.php)
+  - `Filters/` - Security filters (SecurityHeaders.php, APIThrottle.php, IPBlockFilter.php)
   - `Language/` - Internationalization files
 - `system/` - CodeIgniter 4 framework core (do not modify)
 - `writable/` - Application logs, cache, uploads
+  - `tenant-data/{user-id}/` - Per-tenant data directories
 - `tests/` - PHPUnit test files
 - `vendor/` - Composer dependencies
 
-### Key Controllers
-- `Home.php` - Main dashboard and primary application logic (220KB+)
-- `Api.php` - API endpoints for license validation (140KB+)
-- `LicenseManager.php` - License management functionality
-- `AuthController.php` - User authentication
-- `Cronjob.php` - Scheduled task handlers
+### Key SaaS Controllers
+- `Home.php` - Multi-tenant dashboard and subscription management
+- `Api.php` - Multi-tenant API endpoints with User-API-Key authentication
+- `AuthController.php` - Multi-tenant user authentication
+- `SubscriptionController.php` - Billing and subscription management
+- `Cronjob.php` - Scheduled task handlers for billing and maintenance
 
 ## Development Commands
 
@@ -78,24 +82,36 @@ The project includes these development dependencies:
 
 Tests require database configuration in `app/Config/Database.php` under the 'tests' group. Set up a test database before running the full test suite.
 
-## Key Features
+## Key SaaS Features
 
-### License Management System
-- License validation and activation
-- Device/domain registration tracking
+### Multi-Tenant License Management System
+- Tenant-isolated license validation and activation
+- Device/domain registration tracking per tenant
 - Email-based license distribution
-- Purchase verification via Envato API
+- Complete data separation with `owner_id` scoping
 
-### Authentication & Security
+### Subscription Management System
+- Package-based billing (monthly/yearly)
+- Usage tracking and limits enforcement
+- Automated billing and payment processing
+- Trial management and conversion tracking
+
+### Multi-Tenant Authentication & Security
 - User authentication with CodeIgniter Shield
-- IP blocking functionality
-- Session management
+- User-API-Key authentication (6-character alphanumeric)
+- Dual authentication layers (Admin + Tenant)
+- User-specific AES-256-GCM encryption
+- Timing-safe authentication for security
+- IP blocking functionality per tenant
+- Session management with tenant isolation
 - Role-based access control
 
-### Notification System
-- Email notifications for license events
-- Admin notification management
-- Template-based email system
+### SaaS-Specific Features
+- Complete tenant data isolation
+- Per-tenant configuration via UserSettingsModel
+- Usage analytics and resource monitoring
+- Multi-tenant notification system
+- Subscription billing integration
 
 ## Environment Setup
 
@@ -114,16 +130,24 @@ Tests require database configuration in `app/Config/Database.php` under the 'tes
 - Use migrations for database schema changes
 - The application uses output compression for performance optimization
 
-### Important Helper Functions
-- `getMyConfig()` - Dynamic configuration loading from database
-- `generateLicenseKey()` - Secure license key generation
+### Important SaaS Helper Functions
+- `getMyConfig($key, $userID)` - Multi-tenant configuration loading from database
+- `generateLicenseKey($userID)` - Secure tenant-specific license key generation
+- `generateUserApiKey()` - 6-character User API key generation
+- `encrypt_secret_key($plaintext, $userID)` - User-specific AES-256-GCM encryption
+- `decrypt_secret_key($encrypted, $userID)` - User-specific decryption
+- `timing_safe_equals($known, $user)` - Timing-safe string comparison
 - `setMyTimezone()` - User timezone management
 - `setMyLocale()` - Internationalization support
-- `initLicenseManager()` - License system initialization
 
-### Security Considerations
+### SaaS Security Considerations
 - All timestamps stored in UTC timezone
-- IP blocking system for abuse prevention
-- Rate limiting on API endpoints (15 requests/minute default)
+- Multi-tenant data isolation with `owner_id` foreign keys
+- User-specific encryption keys for complete tenant separation
+- IP blocking system for abuse prevention per tenant
+- Tiered rate limiting (10/30/60 requests/minute by endpoint type)
 - Multi-layer input validation and sanitization
-- Secret key authentication for API access
+- Dual authentication: Admin secret keys + User-API-Keys
+- User-API-Key header authentication for tenant operations
+- Timing-safe authentication to prevent timing attacks
+- Comprehensive security filters (SecurityHeaders, APIThrottle, IPBlock)

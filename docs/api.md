@@ -1,23 +1,30 @@
-# MERAF Production Panel - API Documentation
+# MERAF Production Panel SaaS - API Documentation
 
 ## API Overview
 
-The MERAF Production Panel provides a comprehensive RESTful API for license management operations. The API is built using CodeIgniter 4's ResourceController and follows REST principles with JSON responses.
+The MERAF Production Panel SaaS provides a comprehensive RESTful API for multi-tenant license management operations. The API is built using CodeIgniter 4's ResourceController and follows REST principles with JSON responses, featuring tenant isolation and enterprise-grade security.
 
 ### Base URL
 ```
 https://your-domain.com/api/
 ```
 
-### Authentication ✅ **ENTERPRISE-GRADE SECURITY**
+### Authentication ✅ **ENTERPRISE-GRADE MULTI-TENANT SECURITY**
 
-The API uses **timing-safe** secret key-based authentication with **AES-256-GCM encryption** at rest:
+The SaaS API uses **dual authentication layers** with **timing-safe validation** and **AES-256-GCM encryption**:
 
+#### 1. Admin Secret Keys (Global Operations)
 - **Creation Secret Key**: For license creation operations
-- **Validation Secret Key**: For license validation operations  
+- **Validation Secret Key**: For license validation operations
 - **Activation Secret Key**: For domain/device registration operations
 - **Management Secret Key**: For license management operations
 - **General Secret Key**: For general information operations
+
+#### 2. User API Keys (Tenant-Specific Operations)
+- **User-API-Key**: 6-character alphanumeric tenant authentication
+- **Tenant Isolation**: Each user's operations restricted to their data
+- **Automatic Encryption**: All user API keys encrypted with user-specific keys
+- **Multi-Tenant Security**: Complete data isolation between tenants
 
 **Security Features**:
 - **AES-256-GCM Encryption**: All API secret keys encrypted at rest with authenticated encryption
@@ -28,14 +35,100 @@ The API uses **timing-safe** secret key-based authentication with **AES-256-GCM 
 - **Generic Error Messages**: Prevents information disclosure about system internals
 - **Audit Logging**: All encryption/decryption operations logged for security monitoring
 
-**Encryption Specifications**:
+**Multi-Tenant Encryption Specifications**:
 - **Algorithm**: AES-256-GCM (Authenticated Encryption with Additional Data)
 - **IV Generation**: Cryptographically secure random bytes for each operation
-- **Key Derivation**: SHA-256 with application-specific salt
-- **Storage**: Base64 encoded encrypted keys in database
+- **Key Derivation**: SHA-256 with user-specific salt for tenant isolation
+- **Storage**: Base64 encoded encrypted keys in `user_settings` table
+- **Tenant Isolation**: Each user's keys encrypted with unique encryption keys
 - **Backward Compatibility**: Existing installations automatically migrate on next settings save
 
+**User API Key Features**:
+- **Format**: 6-character alphanumeric (e.g., "A1B2C3")
+- **Generation**: Cryptographically secure random generation excluding ambiguous characters
+- **Auto-Save**: Generated keys automatically encrypted and saved to database
+- **Header Authentication**: `User-API-Key: A1B2C3` header for tenant-specific operations
+
 ## API Endpoints
+
+### Tenant-Specific Operations (User API Key Authentication)
+
+All tenant-specific operations require the `User-API-Key` header for authentication and automatically enforce data isolation.
+
+#### Headers Required
+```
+User-API-Key: A1B2C3
+Content-Type: application/json
+```
+
+#### User Dashboard Data
+**Endpoint**: `GET /dashboard-data`
+**Purpose**: Retrieve comprehensive dashboard data for authenticated user
+**Authentication**: User API Key (header)
+
+**Response Format**:
+```json
+{
+    "user": {
+        "id": 123,
+        "username": "john_doe",
+        "email": "john@example.com",
+        "first_name": "John",
+        "last_name": "Doe",
+        "api_key": "A1B2C3"
+    },
+    "licenses": [
+        {
+            "id": 1,
+            "license_key": "ABC123...",
+            "status": "active",
+            "type": "lifetime",
+            "customer_email": "customer@example.com"
+        }
+    ],
+    "statistics": {
+        "total_licenses": 15,
+        "active_licenses": 12,
+        "expired_licenses": 2,
+        "blocked_licenses": 1
+    },
+    "recent_activities": [
+        {
+            "license_key": "ABC123...",
+            "action": "validation_attempt",
+            "timestamp": "2024-01-15 10:30:00"
+        }
+    ]
+}
+```
+
+#### User License Management
+**Endpoint**: `POST /user/licenses`
+**Purpose**: Create license for authenticated user's tenant
+**Authentication**: User API Key (header)
+
+**Request Body**:
+```json
+{
+    "license_type": "lifetime|trial|subscription",
+    "license_status": "active|pending|blocked",
+    "first_name": "Customer Name",
+    "last_name": "Customer Last",
+    "email": "customer@example.com",
+    "max_allowed_domains": 1,
+    "max_allowed_devices": 1,
+    "product_ref": "my-product"
+}
+```
+
+#### User Settings Management
+**Endpoint**: `GET /user/settings`
+**Purpose**: Retrieve user's application settings
+**Authentication**: User API Key (header)
+
+**Endpoint**: `POST /user/settings`
+**Purpose**: Update user's application settings
+**Authentication**: User API Key (header)
 
 ### 1. Routine Validation (Special Endpoint)
 
@@ -565,21 +658,23 @@ sanitize_input($input)                     // XSS and injection prevention
 - **UTC Timestamps**: Consistent timezone handling for audit trails
 - **Secure IP Hashing**: Privacy-preserving IP logging for analytics
 
-### 6. Encryption Infrastructure ✅ **FULLY IMPLEMENTED**
-**AES-256-GCM Secret Key Protection**:
+### 6. Multi-Tenant Encryption Infrastructure ✅ **FULLY IMPLEMENTED**
+**AES-256-GCM Multi-Tenant Protection**:
 ```php
-encrypt_secret_key($plaintext)     // Encrypt sensitive keys for database storage
-decrypt_secret_key($encrypted_data) // Decrypt keys for validation  
-get_encryption_key()               // Secure key derivation from environment
+encrypt_secret_key($plaintext, $userID)     // Encrypt with user-specific key
+decrypt_secret_key($encrypted_data, $userID) // Decrypt with user-specific key
+get_encryption_key($userID)                  // User-specific key derivation
+generateUserApiKey()                         // Generate 6-char alphanumeric key
 ```
 
-**Implementation Features**:
-- ✅ **Installation Integration**: Auto-encrypt keys during new installation
-- ✅ **Settings Integration**: Real-time encryption when admin saves settings  
-- ✅ **Runtime Decryption**: Transparent decryption for API operations
-- ✅ **Plugin Compatibility**: Fixed WooCommerce and SLM plugin integrations
-- ✅ **Security Fix**: Resolved internal API vulnerability (LicenseManager.php:1233)
-- ✅ **Smart Migration**: Seamless upgrade from plaintext to encrypted keys
+**SaaS Implementation Features**:
+- ✅ **Multi-Tenant Isolation**: User-specific encryption keys for complete data separation
+- ✅ **UserSettingsModel Integration**: Auto-encrypt settings using `setUserSetting()`
+- ✅ **User API Key Encryption**: 6-character keys encrypted while preserving format
+- ✅ **Auto-Save Functionality**: Generated keys automatically saved to database
+- ✅ **Backward Compatibility**: Seamless migration from plaintext to encrypted keys
+- ✅ **Timing-Safe Authentication**: `getUserID()` method uses constant-time comparison
+- ✅ **Header Authentication**: `User-API-Key` header support for tenant operations
 
 ### 7. Generic Error Response Pattern
 **Information Disclosure Prevention**:

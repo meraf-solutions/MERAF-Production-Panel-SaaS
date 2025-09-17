@@ -242,29 +242,42 @@ $routes->get('build-release', 'AdminController::build_release_package', [
  * API Routes *
  *************/
 $routes->group("api", function ($routes) {
-    $routes->resource("license/generate", ['controller' => 'Api::generateLicenseKeySLM']);
-    $routes->resource("license/all/(:any)", ['controller' => 'Api::listLicenses/$1']);
-    $routes->resource("license/export/(:any)", ['controller' => 'Api::exportLicensesCsv/$1']);
-    $routes->resource("license/verify/(:any)/(:any)", ['controller' => 'Api::checkLicense/$1/$2']);
-    $routes->resource("license/data/(:any)/(:any)/(:any)", ['controller' => 'Api::retrieveLicense/$1/$2/$3']);
-    $routes->resource("license/config/(:any)", ['controller' => 'Api::retrieveNewLicenseSettings/$1']);
-    $routes->resource("license/create/(:any)/(:any)", ['controller' => 'Api::createLicense/$1/$2']);
-    $routes->resource("license/edit/(:any)", ['controller' => 'Api::editLicense/$1']);
-    $routes->resource("license/unregister/(:segment)/(:segment)/(:segment)/(:segment)", ['controller' => 'Api::unregisterDomainAndDevice/$1/$2/$3/$4']);
-    $routes->resource("license/register/(:segment)/(:segment)/(:segment)/(:segment)", ['controller' => 'Api::registerDomainAndDevice/$1/$2/$3/$4']);
-    $routes->resource("license/logs/(:segment)/(:segment)", ['controller' => 'Api::license_acitivty_logs/$1/$2']);
-    $routes->resource("license/delete/(:segment)/(:any)", ['controller' => 'Api::delete_license_action/$1/$2/$3']);
-    $routes->resource("license/subscribers/(:segment)", ['controller' => 'Api::subscribers/$1']);
-    $routes->resource("product/all", ['controller' => 'Api::listProducts']);
-    $routes->resource("product/with-variations", ['controller' => 'Api::listProductsWithVariations']);
-    $routes->resource("product/current-versions", ['controller' => 'Api::listProductCurrentVersions']);
-    $routes->resource("product/packages/(:segment)/(:segment)", ['controller' => 'Api::fetchProductFiles/$1/$2']);
-    $routes->resource("product/changelog/(:segment)/(:segment)", ['controller' => 'Api::fetchProductChangelog/$1/$2']);
-    $routes->resource("variation/all", ['controller' => 'Api::listVariations']);
+    // Tenant-Specific Operations (User API Key Authentication)
+    $routes->get("dashboard-data", 'Api::getDashboardData');
+    $routes->post("user/licenses", 'Api::createUserLicense');
+    $routes->get("user/settings", 'Api::getUserSettings');
+    $routes->post("user/settings", 'Api::updateUserSettings');
+
+    // License Management API - Fixed from resource() to specific HTTP methods
+    $routes->get("license/generate", 'Api::generateLicenseKeySLM');
+    $routes->get("license/all/(:any)", 'Api::listLicenses/$1');
+    $routes->get("license/export/(:any)", 'Api::exportLicensesCsv/$1');
+    $routes->post("license/verify/(:any)/(:any)", 'Api::checkLicense/$1/$2');
+    $routes->get("license/data/(:any)/(:any)/(:any)", 'Api::retrieveLicense/$1/$2/$3');
+    $routes->get("license/config/(:any)", 'Api::retrieveNewLicenseSettings/$1');
+    $routes->get("license/create/(:any)/(:any)", 'Api::createLicense/$1/$2');
+    $routes->post("license/edit/(:any)", 'Api::editLicense/$1');
+
+    // Domain/Device Registration - Fixed route parameter handling
+    $routes->get("license/unregister/(:segment)/(:segment)/(:segment)/(:segment)", 'Api::unregisterDomainAndDevice/$1/$2/$3/$4');
+    $routes->get("license/register/(:segment)/(:segment)/(:segment)/(:segment)", 'Api::registerDomainAndDevice/$1/$2/$3/$4');
+
+    // License Management
+    $routes->get("license/logs/(:segment)/(:segment)", 'Api::license_acitivty_logs/$1/$2');
+    $routes->get("license/delete/(:segment)/(:any)", 'Api::delete_license_action/$1/$2/$3');
+    $routes->get("license/subscribers/(:segment)", 'Api::subscribers/$1');
+
+    // Product Information API
+    $routes->get("product/all", 'Api::listProducts');
+    $routes->get("product/with-variations", 'Api::listProductsWithVariations');
+    $routes->get("product/current-versions", 'Api::listProductCurrentVersions');
+    $routes->get("product/packages/(:segment)/(:segment)", 'Api::fetchProductFiles/$1/$2');
+    $routes->get("product/changelog/(:segment)/(:segment)", 'Api::fetchProductChangelog/$1/$2');
+    $routes->get("variation/all", 'Api::listVariations');
 
     // Super Admin Only
-    $routes->resource("user/all/(:any)", ['controller' => 'Api::listUsers/$1']);
-    $routes->resource("package/all/(:any)", ['controller' => 'Api::listPackages/$1']);
+    $routes->get("user/all/(:any)", 'Api::listUsers/$1');
+    $routes->get("package/all/(:any)", 'Api::listPackages/$1');
 });
 
 /*************

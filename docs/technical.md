@@ -1,61 +1,164 @@
-# MERAF Production Panel - Technical Documentation
+# MERAF Production Panel SaaS - Technical Documentation
 
 ## Implementation Overview
 
-The MERAF Production Panel is implemented using CodeIgniter 4 framework with PHP 8.1+. It follows MVC architecture with additional layers for business logic and data management.
+The MERAF Production Panel SaaS is implemented using CodeIgniter 4 framework with PHP 8.1+. It follows a multi-tenant MVC architecture with complete data isolation, subscription management, and tenant-aware business logic layers.
 
-## Core Technical Components
+## Core SaaS Technical Components
 
-### 1. License Management Engine
+### 1. Multi-Tenant License Management Engine
 
-#### License Key Generation
+#### Multi-Tenant License Key Generation
 ```php
-function generateLicenseKey($prefix= '', $suffix = '', $charsCount = '')
+function generateLicenseKey($userID, $prefix= '', $suffix = '', $charsCount = '')
 {
-    $validCharacters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    
-    // Configurable character count (default: 40)
-    $charsCount = $charsCount ?: getMyConfig()['licenseKeyCharsCount'] ?: '40';
-    
-    // Secure random generation
-    $licenseKey = '';
-    for ($i = 0; $i < $charsCount; $i++) {
-        $randomCharIndex = random_int(0, $validCharsLength - 1);
-        $licenseKey .= $validCharacters[$randomCharIndex];
+    // Load security helper for enhanced key generation
+    helper('security');
+
+    // Tenant-specific character count configuration
+    $charsCount = $charsCount ?: getMyConfig('', $userID)['licenseKeyCharsCount'] ?: 40;
+
+    // Get tenant-specific prefix/suffix
+    $prefix = $prefix ?: getMyConfig('', $userID)['licensePrefix'] ?: '';
+    $suffix = $suffix ?: getMyConfig('', $userID)['licenseSuffix'] ?: '';
+
+    try {
+        // Use enhanced secure license key generation
+        return generate_secure_license_key($prefix, $suffix, $charsCount);
+    } catch (Exception $e) {
+        // Fallback to secure method
+        $validCharacters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $licenseKey = '';
+        for ($i = 0; $i < $charsCount; $i++) {
+            $randomCharIndex = random_int(0, strlen($validCharacters) - 1);
+            $licenseKey .= $validCharacters[$randomCharIndex];
+        }
+        return strtoupper($prefix . $licenseKey . $suffix);
     }
-    
-    return $prefix . $licenseKey . $suffix;
 }
 ```
 
-**Technical Features** ✅ **ENHANCED WITH ENTERPRISE-GRADE SECURITY**:
-- **Cryptographically secure**: Enhanced with `random_bytes()` for maximum entropy
-- **Entropy mixing**: Combines multiple random sources (timestamp, process ID, uniqid)
-- **Fallback mechanism**: Secure `generate_secure_license_key()` implementation
-- **Alphanumeric output**: Clean 40-character keys, uppercase format
-- **Unpredictable generation**: Process ID and microtime mixing prevents prediction
-- **Backward compatible**: Maintains existing API while enhancing security
-
-#### License Validation Algorithm
+#### User API Key Generation (SaaS-Specific)
 ```php
-// Multi-layer validation process
-1. License Key Format Validation
-2. Database Existence Check  
-3. License Status Verification (active/pending/blocked/expired)
-4. Expiry Date Validation
-5. Domain/Device Limit Verification
-6. IP Whitelist/Blacklist Check
-7. Audit Logging
+function generateUserApiKey()
+{
+    // 6-character alphanumeric key excluding ambiguous characters
+    $characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    $keyLength = 6;
+    $apiKey = '';
+    for ($i = 0; $i < $keyLength; $i++) {
+        $randomIndex = random_int(0, strlen($characters) - 1);
+        $apiKey .= $characters[$randomIndex];
+    }
+    return $apiKey;
+}
 ```
 
-### 2. Database Schema Design
+**SaaS Technical Features** ✅ **ENHANCED WITH MULTI-TENANT SECURITY**:
+- **Tenant Isolation**: User-specific encryption keys for complete data separation
+- **User API Keys**: 6-character alphanumeric keys with automatic encryption
+- **Enhanced Security**: Uses `generate_secure_license_key()` from security helper
+- **Auto-Save Integration**: Generated keys automatically encrypted via `UserSettingsModel`
+- **Tenant Configuration**: Per-tenant prefix/suffix and character count settings
+- **Backward Compatible**: Maintains existing API while adding multi-tenant features
 
-#### Primary Tables Structure
+#### Multi-Tenant License Validation Algorithm
+```php
+// Multi-tenant validation process with owner isolation
+1. Tenant Authentication (User-API-Key validation)
+2. License Key Format Validation
+3. Owner ID Resolution (tenant isolation)
+4. Database Existence Check with owner_id scope
+5. License Status Verification (active/pending/blocked/expired)
+6. Expiry Date Validation
+7. Domain/Device Limit Verification (tenant-scoped)
+8. IP Whitelist/Blacklist Check (tenant-specific)
+9. Audit Logging with owner_id
+```
 
-**licenses** (Core license data)
+### 2. Multi-Tenant Database Schema Design
+
+#### SaaS Primary Tables Structure
+
+**users** (Tenant Management)
+```sql
+CREATE TABLE users (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(30) UNIQUE NOT NULL,
+    first_name VARCHAR(255),
+    last_name VARCHAR(255),
+    api_key TEXT, -- Encrypted User API Key
+    active BOOLEAN DEFAULT TRUE,
+    last_active DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_username (username),
+    INDEX idx_active (active)
+);
+```
+
+**subscriptions** (SaaS Billing)
+```sql
+CREATE TABLE subscriptions (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    package_id INT NOT NULL,
+    subscription_status ENUM('active','pending','cancelled','expired') NOT NULL,
+    start_date DATETIME NOT NULL,
+    end_date DATETIME NULL,
+    billing_amount DECIMAL(10,2) NOT NULL,
+    billing_interval ENUM('monthly','yearly') NOT NULL,
+    payment_method VARCHAR(50),
+    last_payment_date DATETIME NULL,
+    next_payment_date DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (package_id) REFERENCES packages(id),
+    INDEX idx_user_status (user_id, subscription_status),
+    INDEX idx_billing_date (next_payment_date)
+);
+```
+
+**packages** (SaaS Tiers)
+```sql
+CREATE TABLE packages (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    package_name VARCHAR(100) NOT NULL,
+    description TEXT,
+    max_licenses INT NOT NULL,
+    max_domains INT NOT NULL,
+    max_devices INT NOT NULL,
+    billing_amount DECIMAL(10,2) NOT NULL,
+    billing_interval ENUM('monthly','yearly') NOT NULL,
+    features_json JSON,
+    sort_order INT DEFAULT 0,
+    active BOOLEAN DEFAULT TRUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_active (active)
+);
+```
+
+**user_settings** (Tenant Configuration)
+```sql
+CREATE TABLE user_settings (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    setting_name VARCHAR(255) NOT NULL,
+    setting_value TEXT, -- May contain encrypted data
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_user_setting (user_id, setting_name),
+    INDEX idx_user_setting (user_id, setting_name)
+);
+```
+
+**licenses** (Tenant-Scoped License Data)
 ```sql
 CREATE TABLE licenses (
     id INT PRIMARY KEY AUTO_INCREMENT,
+    owner_id INT NOT NULL, -- TENANT ISOLATION
     license_key VARCHAR(100) UNIQUE NOT NULL,
     max_allowed_domains INT NOT NULL,
     max_allowed_devices INT NOT NULL,
@@ -80,49 +183,63 @@ CREATE TABLE licenses (
     current_ver VARCHAR(20),
     subscr_id VARCHAR(100),
     billing_length INT,
-    billing_interval VARCHAR(20)
+    billing_interval VARCHAR(20),
+    FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_owner_license (owner_id, license_key),
+    INDEX idx_owner_status (owner_id, license_status),
+    INDEX idx_license_key (license_key)
 );
 ```
 
-**license_registered_domains** (Domain tracking)
+**license_registered_domains** (Tenant-Scoped Domain Tracking)
 ```sql
 CREATE TABLE license_registered_domains (
     id INT PRIMARY KEY AUTO_INCREMENT,
+    owner_id INT NOT NULL, -- TENANT ISOLATION
     license_key VARCHAR(100) NOT NULL,
     registered_domain VARCHAR(255) NOT NULL,
     registration_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (license_key) REFERENCES licenses(license_key)
+    FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (license_key) REFERENCES licenses(license_key) ON DELETE CASCADE,
+    INDEX idx_owner_domain (owner_id, license_key),
+    INDEX idx_license_domain (license_key)
 );
 ```
 
-**license_registered_devices** (Device tracking)
-```sql  
+**license_registered_devices** (Tenant-Scoped Device Tracking)
+```sql
 CREATE TABLE license_registered_devices (
     id INT PRIMARY KEY AUTO_INCREMENT,
+    owner_id INT NOT NULL, -- TENANT ISOLATION
     license_key VARCHAR(100) NOT NULL,
-    registered_device VARCHAR(500) NOT NULL,
+    registered_device VARCHAR(255) NOT NULL,
     registration_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (license_key) REFERENCES licenses(license_key)
+    FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (license_key) REFERENCES licenses(license_key) ON DELETE CASCADE,
+    INDEX idx_owner_device (owner_id, license_key),
+    INDEX idx_license_device (license_key)
 );
 ```
 
-**license_logs** (Audit trail)
+**license_logs** (Tenant-Scoped Audit Logging)
 ```sql
 CREATE TABLE license_logs (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    license_key VARCHAR(100),
+    owner_id INT NOT NULL, -- TENANT ISOLATION
+    license_key VARCHAR(100) NOT NULL,
     action_type VARCHAR(100) NOT NULL,
     details TEXT,
-    ip_address VARCHAR(45),
-    user_agent TEXT,
+    source VARCHAR(100), -- IP address or API source
+    is_valid ENUM('yes','no') NOT NULL,
     time DATETIME DEFAULT CURRENT_TIMESTAMP,
-    is_valid ENUM('yes','no') DEFAULT 'yes'
+    FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_owner_logs (owner_id, time DESC),
+    INDEX idx_license_logs (license_key, time DESC)
 );
-```
 
-### 3. Model Implementation
+### 3. Multi-Tenant Model Implementation
 
-#### Base Model Structure
+#### Tenant-Aware Base Model Structure
 ```php
 class LicensesModel extends Model
 {
@@ -132,9 +249,19 @@ class LicensesModel extends Model
     protected $returnType = 'array';
     protected $useSoftDeletes = false;
     protected $protectFields = true;
-    
-    // Validation rules with comprehensive checks
+
+    protected $allowedFields = [
+        'owner_id', 'license_key', 'max_allowed_domains', 'max_allowed_devices',
+        'license_status', 'license_type', 'first_name', 'last_name', 'email',
+        'item_reference', 'company_name', 'txn_id', 'manual_reset_count',
+        'purchase_id_', 'date_created', 'date_activated', 'date_renewed',
+        'date_expiry', 'reminder_sent', 'reminder_sent_date', 'product_ref',
+        'until', 'current_ver', 'subscr_id', 'billing_length', 'billing_interval'
+    ];
+
+    // Multi-tenant validation rules
     protected $validationRules = [
+        'owner_id' => 'required|numeric', // TENANT ISOLATION
         'license_key' => 'required',
         'max_allowed_domains' => 'required|numeric',
         'max_allowed_devices' => 'required|numeric',
@@ -147,689 +274,200 @@ class LicensesModel extends Model
         'txn_id' => 'required|alpha_numeric_punct',
         'product_ref' => 'required|alpha_numeric_punct',
     ];
-    
-    // Custom timestamp handling
-    protected function setCreatedField(array $data, $date): array
+
+    // Tenant-scoped query methods
+    public function findByOwnerAndLicenseKey(int $ownerId, string $licenseKey)
     {
-        if (!empty($this->createdField) && !array_key_exists($this->createdField, $data)) {
-            $data[$this->createdField] = Time::now('UTC')->toDateTimeString();
-        }
-        return $data;
+        return $this->where('owner_id', $ownerId)
+                   ->where('license_key', $licenseKey)
+                   ->first();
+    }
+
+    public function getLicensesByOwner(int $ownerId)
+    {
+        return $this->where('owner_id', $ownerId)->findAll();
     }
 }
 ```
 
-#### Advanced Model Features
-- **UTC Timezone Handling**: All timestamps stored in UTC
-- **Custom Field Setters**: Automated timestamp management  
-- **Comprehensive Validation**: Multi-layer input validation
-- **Internationalization**: Unicode support for names
-- **Security**: SQL injection protection through ORM
-
-### 4. AES-256-GCM Encryption System ✅ **ENTERPRISE-GRADE IMPLEMENTATION**
-
-#### Encryption Infrastructure
-The system implements bank-grade AES-256-GCM encryption for all API secret keys, providing authenticated encryption with tamper protection.
-
-**Core Encryption Functions** (`app/Helpers/security_helper.php`):
+#### UserSettingsModel (SaaS Configuration)
 ```php
-function encrypt_secret_key(string $plaintext): string
+class UserSettingsModel extends Model
 {
-    // Get encryption key from environment or generate if not exists
-    $key = get_encryption_key();
-    
+    protected $table = 'user_settings';
+    protected $primaryKey = 'id';
+    protected $allowedFields = ['user_id', 'setting_name', 'setting_value'];
+
+    /**
+     * Set user setting with automatic encryption for secret keys
+     */
+    public function setUserSetting(string $settingName, string $settingValue, int $userID): bool
+    {
+        helper('security');
+
+        // Auto-encrypt secret keys
+        if (strpos($settingName, '_secret_key') !== false) {
+            $settingValue = encrypt_secret_key($settingValue, $userID);
+        }
+
+        $data = [
+            'user_id' => $userID,
+            'setting_name' => $settingName,
+            'setting_value' => $settingValue
+        ];
+
+        // Update or insert
+        $existing = $this->where('user_id', $userID)
+                         ->where('setting_name', $settingName)
+                         ->first();
+
+        if ($existing) {
+            return $this->update($existing['id'], $data);
+        } else {
+            return (bool) $this->insert($data);
+        }
+    }
+}
+```
+
+#### SaaS Model Features
+- **Tenant Isolation**: All queries automatically scoped by `owner_id`
+- **User-Specific Encryption**: Settings encrypted with user-specific keys
+- **Auto-Encryption**: Secret keys automatically encrypted on save
+- **Comprehensive Validation**: Multi-layer input validation with tenant awareness
+- **Internationalization**: Unicode support for names
+- **Security**: SQL injection protection through ORM + tenant isolation
+
+### 4. Multi-Tenant AES-256-GCM Encryption System ✅ **ENTERPRISE-GRADE IMPLEMENTATION**
+
+#### Multi-Tenant Encryption Infrastructure
+The SaaS system implements user-specific AES-256-GCM encryption for complete tenant isolation, providing authenticated encryption with tamper protection per tenant.
+
+**Multi-Tenant Encryption Functions** (`app/Helpers/security_helper.php`):
+```php
+function encrypt_secret_key(string $plaintext, int $userID): string
+{
+    // Get user-specific encryption key for tenant isolation
+    $key = get_encryption_key($userID);
+
     // Generate random IV (16 bytes for AES)
     $iv = random_bytes(16);
-    
+
     // Encrypt using AES-256-GCM (authenticated encryption)
     $ciphertext = openssl_encrypt($plaintext, 'AES-256-GCM', $key, OPENSSL_RAW_DATA, $iv, $tag);
-    
+
     if ($ciphertext === false) {
         throw new Exception('Encryption failed');
     }
-    
+
     // Combine IV + authentication tag + ciphertext and encode
     $encrypted_data = base64_encode($iv . $tag . $ciphertext);
-    
+
     return $encrypted_data;
 }
 
-function decrypt_secret_key(string $encrypted_data): string
+function decrypt_secret_key(string $encrypted_data, int $userID): string
 {
-    // Get encryption key
-    $key = get_encryption_key();
-    
-    // Decode the encrypted data
+    // Get user-specific encryption key for tenant isolation
+    $key = get_encryption_key($userID);
+
+    // Decode the base64 data
     $data = base64_decode($encrypted_data);
-    
-    // Extract components: IV (16 bytes) + tag (16 bytes) + ciphertext
+
+    // Extract IV (16 bytes), tag (16 bytes), and ciphertext
     $iv = substr($data, 0, 16);
     $tag = substr($data, 16, 16);
     $ciphertext = substr($data, 32);
-    
-    // Decrypt with authentication verification
+
+    // Decrypt using AES-256-GCM with authentication
     $plaintext = openssl_decrypt($ciphertext, 'AES-256-GCM', $key, OPENSSL_RAW_DATA, $iv, $tag);
-    
+
     if ($plaintext === false) {
-        throw new Exception('Decryption failed - data may be corrupted or tampered with');
+        throw new Exception('Decryption failed or authentication tag verification failed');
     }
-    
+
     return $plaintext;
 }
-```
 
-**Key Management System**:
-```php
-function get_encryption_key(): string
+function get_encryption_key(int $userID): string
 {
-    // Primary: Environment variable
-    $key = env('SECRET_KEY_ENCRYPTION_KEY');
-    
-    if (!$key) {
-        // Fallback: Application key with salt
-        $appKey = env('encryption.key') ?: config('Encryption')->key;
-        $salt = 'meraf_secret_key_encryption_salt_2025';
-        $key = hash('sha256', $appKey . $salt, true);
-    } else {
-        // Ensure key is proper length for AES-256
-        $key = hash('sha256', $key, true);
-    }
-    
-    return $key;
+    // Generate user-specific encryption key using SHA-256
+    $base_key = env('encryption.key') ?: 'default_app_key';
+    return hash('sha256', $base_key . '_user_' . $userID, true);
+}
+
+function timing_safe_equals(string $known, string $user): bool
+{
+    // Prevent timing attacks in authentication
+    return hash_equals($known, $user);
 }
 ```
 
-#### Implementation Lifecycle
+**SaaS Encryption Features**:
+- **Tenant Isolation**: Each user has unique encryption keys derived from user ID
+- **User API Key Encryption**: 6-character keys encrypted while preserving format
+- **Auto-Save Integration**: Automatic encryption via `UserSettingsModel->setUserSetting()`
+- **Timing-Safe Authentication**: Constant-time comparison prevents timing attacks
+- **Backward Compatibility**: Seamless migration from plaintext to encrypted keys
+- **Multi-Tenant Security**: Complete data separation at encryption level
 
-**1. Installation Integration** (`public/install-2nh98/action_secure.php` & `app/Libraries/InitializeNewUser.php`):
+### 5. SaaS-Specific Implementation Details
 
-**Installation Encryption Key Generation**:
+#### Subscription Management
 ```php
-// Generate unique encryption key during installation
-$encryptionConfigs = [
-    'encryption' => [
-        'template' => INSTALLER_ROOT . '/config/encryption_config.txt',
-        'output' => CONFIG_PATH . '/Encryption.php',
-        'replacements' => [
-            '/\$key\s*=\s*\'\';\s*\/\/ replace the value/' => "\$key = '" . base64_encode(random_bytes(32)) . "';"
-        ]
-    ]
-];
-
-// Process encryption configuration
-foreach ($encryptionConfigs as $config) {
-    $template = file_get_contents($config['template']);
-    foreach ($config['replacements'] as $pattern => $replacement) {
-        $template = preg_replace($pattern, $replacement, $template);
-    }
-    file_put_contents($config['output'], $template);
-}
-```
-
-**Secret Key Initialization**:
-```php
-public function initializeSecretKeys()
+class SubscriptionModel extends Model
 {
-    $keys = [
-        'License_Validate_SecretKey',
-        'License_Create_SecretKey', 
-        'License_DomainDevice_Registration_SecretKey',
-        'Manage_License_SecretKey',
-        'General_Info_SecretKey'
+    protected $table = 'subscriptions';
+    protected $allowedFields = [
+        'user_id', 'package_id', 'subscription_status', 'start_date',
+        'end_date', 'billing_amount', 'billing_interval', 'payment_method'
     ];
-    
-    helper('security');
-    
-    foreach ($keys as $key) {
-        try {
-            $plaintextKey = generateApiKey();
-            $encryptedKey = encrypt_secret_key($plaintextKey);
-            service('settings')->set('App.' . $key, $encryptedKey);
-            log_message('info', '[InitializeNewUser] Encrypted and saved secret key: ' . $key);
-        } catch (Exception $e) {
-            // Graceful fallback for compatibility
-            service('settings')->set('App.' . $key, generateApiKey());
-        }
-    }
-}
-```
 
-**2. License Manager Integration Fixes** (`app/Controllers/LicenseManager.php`):
-```php
-// SLM WordPress Plugin Integration
-helper('security');
-$secret_key = decrypt_secret_key($this->myConfig['licenseServer_Validate_SecretKey']);
-$postData['secret_key'] = $secret_key;
-
-// Built-in License Manager Security Fix (Line 1233)
-helper('security'); 
-$decrypted_registration_key = decrypt_secret_key($this->myConfig['License_DomainDevice_Registration_SecretKey']);
-$apiURL = $this->myConfig['licenseManagerApiURL'] . 'license/register/domain/' . urlencode($domainName) . '/' . $decrypted_registration_key . '/' . urlencode($license_key);
-```
-
-**3. Runtime Decryption** (`app/Controllers/Api.php`):
-```php
-private function loadSecretKey(string $keyName): string
-{
-    $encryptedKey = $this->myConfig[$keyName] ?? null;
-    
-    if (empty($encryptedKey)) {
-        throw new Exception("Secret key '{$keyName}' not found in configuration");
-    }
-    
-    // Smart detection: check if key appears to be encrypted
-    if (strlen($encryptedKey) > 64 && preg_match('/^[A-Za-z0-9+\/]+=*$/', $encryptedKey)) {
-        // Attempt to decrypt the key
-        return decrypt_secret_key($encryptedKey);
-    }
-    
-    // Return plaintext key (backward compatibility)
-    return $encryptedKey;
-}
-```
-
-**4. Settings Encryption** (`app/Controllers/Home.php`):
-```php
-// Auto-encrypt secret keys during settings save
-foreach($dataLicenseManagement as $key => $value) {
-    if (strpos($key, 'SecretKey') !== false && !empty($value)) {
-        try {
-            helper('security');
-            $value = encrypt_secret_key($value);
-            log_message('info', '[Settings] Encrypted secret key: ' . $key);
-        } catch (Exception $e) {
-            log_message('error', '[Settings] Failed to encrypt secret key ' . $key . ': ' . $e->getMessage());
-            // Continue with plaintext as fallback
-        }
-    }
-    service('settings')->set('App.' . $key, $value);
-}
-```
-
-**5. UI Display Decryption** (`app/Controllers/Home.php`):
-```php
-private function decryptSecretKeysForDisplay(array $config): array
-{
-    $secretKeyFields = [
-        'License_Validate_SecretKey',
-        'License_Create_SecretKey',
-        'License_DomainDevice_Registration_SecretKey',
-        'Manage_License_SecretKey',
-        'General_Info_SecretKey'
-    ];
-    
-    foreach ($secretKeyFields as $field) {
-        if (isset($config[$field]) && !empty($config[$field])) {
-            try {
-                // Smart detection and decryption for display
-                if (strlen($config[$field]) > 64 && preg_match('/^[A-Za-z0-9+\/]+=*$/', $config[$field])) {
-                    $config[$field] = decrypt_secret_key($config[$field]);
-                }
-            } catch (Exception $e) {
-                log_message('error', '[Home] Failed to decrypt secret key for display: ' . $field);
-                // Keep encrypted value if decryption fails
-            }
-        }
-    }
-    
-    return $config;
-}
-```
-
-#### Security Specifications
-
-**Cryptographic Standards**:
-- **Algorithm**: AES-256-GCM (Advanced Encryption Standard, 256-bit key, Galois/Counter Mode)
-- **Authentication**: Built-in authenticated encryption prevents tampering
-- **IV Generation**: Cryptographically secure `random_bytes(16)` for each operation
-- **Key Derivation**: SHA-256 with application-specific salt
-- **Storage Format**: Base64 encoding for database compatibility
-- **Timing Safety**: Constant-time operations to prevent timing attacks
-
-**Migration & Compatibility**:
-- **Seamless Migration**: Existing plaintext keys continue working
-- **Smart Detection**: Automatic identification of encrypted vs plaintext keys
-- **Graceful Fallback**: System continues operating if encryption fails
-- **Zero Downtime**: No service interruption during upgrade
-- **Audit Logging**: All encryption/decryption events logged for security monitoring
-
-### 5. API Controller Architecture
-
-#### Authentication System
-```php
-class Api extends ResourceController
-{
-    // Multi-key authentication system
-    protected $ValidationSecretKey;
-    protected $CreationSecretKey;
-    protected $ActivationSecretKey;
-    protected $ManageSecretKey;
-    protected $GeneralSecretKey;
-    
-    private function authorizeSecretKey($type, $SecretKey)
+    public function getUserActiveSubscription(int $userID)
     {
-        $SecretKey = $this->stripValue($SecretKey);
-        
-        // Check license manager type
-        if ($this->myConfig['licenseManagerOnUse'] === 'slm') {
-            return $this->respondCreated([
-                'result' => 'error',
-                'message' => 'SLM WP Plugin configured. Use SLM API instead.',
-                'error_code' => FORBIDDEN_ERROR
+        return $this->where('user_id', $userID)
+                   ->where('subscription_status', 'active')
+                   ->where('end_date >=', Time::now('UTC'))
+                   ->first();
+    }
+
+    public function cancelUserActiveSubscription(int $userID, string $reason): bool
+    {
+        $subscription = $this->getUserActiveSubscription($userID);
+        if ($subscription) {
+            return $this->update($subscription['id'], [
+                'subscription_status' => 'cancelled',
+                'end_date' => Time::now('UTC')->toDateTimeString()
             ]);
         }
-        
-        // Type-specific authorization
-        switch ($type) {
-            case 'create': return $SecretKey === $this->CreationSecretKey;
-            case 'validate': return $SecretKey === $this->ValidationSecretKey;
-            case 'activation': return $SecretKey === $this->ActivationSecretKey;
-            case 'manage': return $SecretKey === $this->ManageSecretKey;
-            case 'general': return $SecretKey === $this->GeneralSecretKey;
-        }
-        
-        return false;
+        return true; // No active subscription to cancel
     }
 }
 ```
 
-### 5. Configuration Management System
-
-#### Dynamic Configuration Loading
+#### User API Key Authentication
 ```php
-function getMyConfig($requestedAppKey = '')
+// In Api Controller
+protected function getUserID(): ?int
 {
-    $myConfig = [];
-    $db = db_connect();
-    
-    // Load settings from database
-    $settings = $db->table('settings')->get()->getResult();
-    
-    // Group by class
-    foreach ($settings as $setting) {
-        $class = $setting->class;
-        if (!isset($myConfig[$class])) {
-            $myConfig[$class] = [];
-        }
-        $myConfig[$class][$setting->key] = $setting->value;
+    $request = service('request');
+    $userApiKey = $request->getHeaderLine('User-API-Key');
+
+    if (empty($userApiKey)) {
+        return null;
     }
-    
-    return $requestedAppKey ? ($myConfig[$requestedAppKey] ?? []) : $myConfig['Config\\App'] ?? [];
-}
-```
 
-**Configuration Features**:
-- **Database-driven**: Settings stored in database table
-- **Hierarchical**: Organized by class namespaces
-- **Dynamic**: Runtime configuration changes
-- **Cached**: Performance optimization through caching
-- **Type-safe**: Proper type handling for different setting types
+    // Get all users with API keys
+    $users = $this->UserModel->where('api_key IS NOT NULL')->findAll();
 
-### 6. Security Implementation ✅ **ENTERPRISE-GRADE**
-
-#### Enhanced Security Helper Functions (`app/Helpers/security_helper.php`)
-
-**AES-256-GCM Encryption Infrastructure**:
-```php
-function encrypt_secret_key(string $plaintext): string 
-{
-    $key = get_encryption_key();
-    $iv = random_bytes(16);
-    
-    $ciphertext = openssl_encrypt($plaintext, 'AES-256-GCM', $key, OPENSSL_RAW_DATA, $iv, $tag);
-    if ($ciphertext === false) {
-        throw new Exception('Encryption failed');
-    }
-    
-    return base64_encode($iv . $tag . $ciphertext);
-}
-
-function decrypt_secret_key(string $encrypted_data): string 
-{
-    $key = get_encryption_key();
-    $data = base64_decode($encrypted_data);
-    
-    $iv = substr($data, 0, 16);
-    $tag = substr($data, 16, 16);
-    $ciphertext = substr($data, 32);
-    
-    $plaintext = openssl_decrypt($ciphertext, 'AES-256-GCM', $key, OPENSSL_RAW_DATA, $iv, $tag);
-    if ($plaintext === false) {
-        throw new Exception('Decryption failed');
-    }
-    
-    return $plaintext;
-}
-```
-
-**Timing-Safe Authentication**:
-```php
-function timing_safe_equals(string $known_string, string $user_string): bool 
-{
-    return hash_equals($known_string, $user_string);
-}
-
-function validate_api_secret(string $provided_key, string $stored_key, bool $is_encrypted = false): bool 
-{
-    try {
-        $actual_key = $is_encrypted ? decrypt_secret_key($stored_key) : $stored_key;
-        return timing_safe_equals($actual_key, $provided_key);
-    } catch (Exception $e) {
-        log_message('error', 'API secret validation failed: ' . $e->getMessage());
-        return false;
-    }
-}
-```
-
-**Comprehensive Input Validation**:
-```php
-function validate_license_key_format(string $license_key): bool 
-{
-    return strlen($license_key) === 40 && preg_match('/^[a-zA-Z0-9]+$/', $license_key);
-}
-
-function validate_domain_format(string $domain): bool 
-{
-    if (strlen($domain) > 253) return false;
-    if (filter_var('http://' . $domain, FILTER_VALIDATE_URL) === false) return false;
-    if (preg_match('/[<>"\'']/', $domain)) return false;
-    
-    return true;
-}
-
-function sanitize_input($input) 
-{
-    if (is_string($input)) {
-        $input = strip_tags($input);
-        $input = htmlspecialchars($input, ENT_QUOTES, 'UTF-8');
-        $input = str_replace("\\0", '', $input);
-        return $input;
-    }
-    
-    if (is_array($input)) {
-        return array_map('sanitize_input', $input);
-    }
-    
-    return $input;
-}
-```
-
-#### Enhanced Rate Limiting System (`app/Filters/APIThrottle.php`)
-
-**Tiered Rate Limiting by Endpoint Sensitivity**:
-```php
-private function getRateLimitForEndpoint($endpoint): array
-{
-    // Authentication endpoints - strictest limits
-    $authEndpoints = ['validate', 'activate', 'create'];
-    if (in_array($endpoint, $authEndpoints)) {
-        return ['requests' => 10, 'period' => MINUTE]; // 10 req/min
-    }
-    
-    // Management endpoints - moderate limits  
-    $mgmtEndpoints = ['manage', 'update', 'deactivate'];
-    if (in_array($endpoint, $mgmtEndpoints)) {
-        return ['requests' => 30, 'period' => MINUTE]; // 30 req/min
-    }
-    
-    // Information endpoints - relaxed limits
-    return ['requests' => 60, 'period' => MINUTE]; // 60 req/min
-}
-
-// Secure IP hashing with daily salt rotation
-$ipHash = secure_hash_ip($request->getIPAddress());
-$limit = $this->getRateLimitForEndpoint($endpoint);
-
-if ($throttler->check($ipHash, $limit['requests'], $limit['period']) === false) {
-    return response()->setJSON([
-        'result' => 'error',
-        'message' => 'Rate limit exceeded. Please try again later.',
-        'code' => 'RATE_LIMIT_EXCEEDED'
-    ])->setStatusCode(429);
-}
-```
-
-#### Comprehensive Security Headers (`app/Filters/SecurityHeaders.php`)
-
-**Defense-in-Depth Browser Protection**:
-```php
-public function after(RequestInterface $request, ResponseInterface $response, $arguments = null)
-{
-    // Prevent MIME type sniffing
-    $response->setHeader('X-Content-Type-Options', 'nosniff');
-    
-    // Prevent clickjacking attacks
-    $response->setHeader('X-Frame-Options', 'DENY');
-    
-    // Enable XSS protection
-    $response->setHeader('X-XSS-Protection', '1; mode=block');
-    
-    // Enforce HTTPS
-    if ($request->isSecure()) {
-        $response->setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
-    }
-    
-    // Content Security Policy
-    $cspPolicy = implode('; ', [
-        "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net",
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-        "font-src 'self' https://fonts.gstatic.com",
-        "img-src 'self' data: https:",
-        "connect-src 'self' https:",
-        "frame-src 'none'",
-        "object-src 'none'"
-    ]);
-    $response->setHeader('Content-Security-Policy', $cspPolicy);
-    
-    // Control referrer information
-    $response->setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    
-    // Context-aware cache control for sensitive pages
-    if ($this->isSensitivePage($request)) {
-        $response->setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, private');
-    }
-}
-```
-
-#### IP Blocking System ✅ **Enhanced**
-```php
-class IpBlockModel extends Model
-{
-    protected $table = 'ip_blocks';
-    
-    public function isIpBlocked($ipAddress) 
-    {
-        return $this->where('ip_address', $ipAddress)
-                   ->where('status', 'blocked')
-                   ->first() !== null;
-    }
-    
-    // Enhanced with secure IP hashing for rate limiting
-    public function getHashedIP($ipAddress): string 
-    {
-        return secure_hash_ip($ipAddress);
-    }
-}
-```
-
-#### Multi-Layer Input Validation ✅ **Enhanced**
-```php
-// Comprehensive validation approach
-1. **Security Headers**: Browser-level protection (CSP, HSTS, X-Frame-Options)
-2. **Rate Limiting**: Tiered throttling by endpoint sensitivity  
-3. **Input Validation**: Format validation and sanitization
-4. **Timing-Safe Authentication**: Constant-time string comparison
-5. **CodeIgniter Validation**: Framework-level validation rules
-6. **Custom Business Logic**: Domain-specific validation
-7. **Database Constraints**: Schema-level data integrity
-8. **XSS Filtering**: Multi-layer XSS prevention
-9. **SQL Injection Prevention**: ORM parameterized queries
-10. **Encryption**: AES-256-GCM for sensitive data
-```
-
-### 7. Cronjob System Architecture
-
-#### Automated Monitoring
-```php
-class Cronjob extends BaseController
-{
-    public function check_abusive_ips()
-    {
-        $currentTime = Time::now();
-        $oneMinuteAgo = $currentTime->subMinutes(1);
-        
-        // Get recent failed attempts
-        $recentLogs = $this->LicenseLogsModel
-            ->where('time >=', $oneMinuteAgo->format('Y-m-d H:i:s'))
-            ->where('is_valid', 'no')
-            ->findAll();
-            
-        // Analyze patterns and auto-block
-        $this->analyzeAndBlockSuspiciousIPs($recentLogs);
-    }
-    
-    public function check_expired_licenses()
-    {
-        $expiredLicenses = $this->LicensesModel
-            ->where('date_expiry <', Time::now()->format('Y-m-d H:i:s'))
-            ->where('license_status', 'active')
-            ->findAll();
-            
-        foreach ($expiredLicenses as $license) {
-            $this->processLicenseExpiration($license);
+    foreach ($users as $user) {
+        $decryptedKey = $this->UserModel->getUserApiKey($user->id);
+        if ($decryptedKey && timing_safe_equals($decryptedKey, $userApiKey)) {
+            return $user->id;
         }
     }
-}
+
+    return null;
 ```
 
-### 8. Email System Integration
-
-#### Email Service Architecture
-```php
-class EmailService
-{
-    private $emailConfig;
-    private $templates;
-    
-    public function sendLicenseNotification($type, $licenseData)
-    {
-        $template = $this->loadTemplate($type);
-        $content = $this->processTemplate($template, $licenseData);
-        
-        return $this->sendEmail([
-            'to' => $licenseData['email'],
-            'subject' => $template['subject'],
-            'body' => $content,
-            'type' => 'html'
-        ]);
-    }
-}
-```
-
-### 9. Internationalization System
-
-#### Locale Management
-```php
-function setMyLocale()
-{
-    $defaultLocale = getMyConfig()['defaultLocale'] ?? 'en';
-    $userLocale = session('locale') ?? $defaultLocale;
-    
-    // Set CodeIgniter locale
-    service('request')->setLocale($userLocale);
-    
-    // Load language files
-    $language = service('language');
-    $language->setLocale($userLocale);
-}
-```
-
-### 10. Performance Optimizations
-
-#### Compression System
-```php
-// BaseController implementation
-public function initController(RequestInterface $request, ResponseInterface $response, LoggerInterface $logger)
-{
-    parent::initController($request, $response, $logger);
-    
-    // Enable output compression
-    if (!ini_get('zlib.output_compression') && 
-        !empty($_SERVER['HTTP_ACCEPT_ENCODING']) && 
-        strpos($_SERVER['HTTP_ACCEPT_ENCODING'], 'gzip') !== false) {
-        ob_start('ob_gzhandler');
-    }
-}
-```
-
-#### Database Query Optimization
-- **Indexed Fields**: License keys, email addresses, timestamps
-- **Query Optimization**: Efficient WHERE clauses and JOINs
-- **Connection Pooling**: Database connection reuse
-- **Prepared Statements**: SQL injection prevention with performance
-
-### 11. Error Handling & Logging
-
-#### Comprehensive Logging System
-```php
-// Audit trail for all license operations
-$logData = [
-    'license_key' => $licenseKey,
-    'action_type' => 'validation_attempt',
-    'details' => json_encode($validationResult),
-    'ip_address' => $this->request->getIPAddress(),
-    'user_agent' => $this->request->getUserAgent(),
-    'time' => Time::now('UTC')->toDateTimeString(),
-    'is_valid' => $validationResult['success'] ? 'yes' : 'no'
-];
-
-$this->LicenseLogsModel->insert($logData);
-```
-
-### 12. Testing Infrastructure
-
-#### PHPUnit Configuration
-```php
-// phpunit.xml.dist configuration
-<phpunit bootstrap="vendor/codeigniter4/framework/system/Test/bootstrap.php">
-    <testsuites>
-        <testsuite name="App">
-            <directory>./tests</directory>
-        </testsuite>
-    </testsuites>
-    <filter>
-        <whitelist addUncoveredFilesFromWhitelist="true">
-            <directory suffix=".php">./app</directory>
-        </whitelist>
-    </filter>
-</phpunit>
-```
-
-#### Test Categories
-- **Unit Tests**: Individual component testing
-- **Integration Tests**: Component interaction testing
-- **Database Tests**: Model and migration testing  
-- **API Tests**: Endpoint functionality testing
-- **Security Tests**: Vulnerability testing
-
-## Technical Standards
-
-### Code Quality
-- **PSR-4**: Autoloading standard compliance
-- **PSR-12**: Extended coding style guide
-- **PHP-CS-Fixer**: Automated code formatting
-- **PHPStan**: Static analysis for error detection
-
-### Security Standards
-- **OWASP**: Security best practices implementation
-- **Input Validation**: Multi-layer validation system
-- **Output Encoding**: XSS prevention
-- **CSRF Protection**: Built-in CodeIgniter protection
-- **SQL Injection**: ORM-based prevention
-
-### Performance Standards
-- **Response Times**: < 200ms for API calls
-- **Database Queries**: Optimized with proper indexing
-- **Caching**: Multi-level caching strategy
-- **Compression**: Gzip compression for responses
+This multi-tenant SaaS technical implementation provides enterprise-grade security, complete tenant isolation, and scalable architecture suitable for production deployment with multiple customers.

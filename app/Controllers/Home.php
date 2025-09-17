@@ -37,10 +37,13 @@ class Home extends BaseController
 
     public function __construct()
     {
-		initLicenseManager();		
+		initLicenseManager();
+
+		// Initialize UserModel first for user account operations
+		$this->UserModel = new UserModel();
 
 		// Get user account details
-		$this->userAcctDetails = auth()->user();
+		$this->userAcctDetails = $this->getUserDetailsWithDecryptedApiKey();
 
         // Get the current user's ID
         $this->userID = $this->userAcctDetails->id ?? NULL;
@@ -76,7 +79,6 @@ class Home extends BaseController
 		$this->PackageModel = new PackageModel();
 		$this->PackageModulesModel = new PackageModulesModel();
 		$this->PaymentModel = new SubscriptionPaymentModel();
-		$this->UserModel = new UserModel();
 		$this->UserSettingsModel = new UserSettingsModel();
 		$this->SubscriptionModel = new SubscriptionModel();
 		
@@ -131,6 +133,33 @@ class Home extends BaseController
             $this->UserModel->assignAdminRole();
         }
     }
+
+	/**
+	 * Get user details with decrypted API key for display purposes
+	 *
+	 * @return object|null User entity with decrypted API key
+	 */
+	private function getUserDetailsWithDecryptedApiKey()
+	{
+		$user = auth()->user();
+
+		if (!$user) {
+			return null;
+		}
+
+		// If user has an API key, decrypt it for display
+		if (!empty($user->api_key)) {
+			$decryptedApiKey = $this->UserModel->getUserApiKey($user->id);
+			if ($decryptedApiKey !== null) {
+				// Create a clone to avoid modifying the original user object
+				$userClone = clone $user;
+				$userClone->api_key = $decryptedApiKey;
+				return $userClone;
+			}
+		}
+
+		return $user;
+	}
 
 	protected function lastLoginHistory()
 	{
@@ -3605,16 +3634,74 @@ public function version_files_action()
 	{
 		$this->checkIfLoggedIn(); // Check if user is logged in before proceeding
 
+		// Load security helper for encryption
+		helper('security');
+
 		$newSecretKey = generateApiKey($length);
 
-		if($newSecretKey) {
-			$response = [
-				'success' => true,
-				'status' => 1,
-				'msg' => $newSecretKey
-			];
-		}
-		else {
+		if ($newSecretKey) {
+			try {
+				// Get current user settings
+				$currentSettings = $this->myConfig;
+
+				// Validate the setting name for security
+				$validSettings = [
+					'License_Create_SecretKey',
+					'License_Validate_SecretKey',
+					'License_DomainDevice_Registration_SecretKey',
+					'Manage_License_SecretKey',
+					'General_Info_SecretKey',
+					'reCAPTCHA_Secret_Key'
+				];
+
+				if (!in_array($setting, $validSettings)) {
+					$response = [
+						'success' => false,
+						'status' => 0,
+						'msg' => 'Invalid setting type'
+					];
+					return $this->response->setJSON($response);
+				}
+
+				// Save the new secret key using the SaaS-specific method
+				// The setUserSetting method will automatically encrypt the key
+				$saveResult = $this->UserSettingsModel->setUserSetting($setting, $newSecretKey, $this->userID);
+
+				if ($saveResult) {
+					log_message('info', "API key '{$setting}' regenerated and auto-saved for user {$this->userID}");
+
+					$response = [
+						'success' => true,
+						'status' => 1,
+						'msg' => $newSecretKey,
+						'auto_saved' => true,
+						'setting_name' => $setting
+					];
+				} else {
+					// If database update fails, still return the key but indicate save failure
+					log_message('error', "Failed to auto-save regenerated key '{$setting}' for user {$this->userID}");
+
+					$response = [
+						'success' => true,
+						'status' => 1,
+						'msg' => $newSecretKey,
+						'auto_saved' => false,
+						'save_error' => 'Database update failed. Please click Save Settings to persist changes.'
+					];
+				}
+
+			} catch (Exception $e) {
+				log_message('error', "Error during key generation and auto-save for user {$this->userID}: " . $e->getMessage());
+
+				$response = [
+					'success' => true,
+					'status' => 1,
+					'msg' => $newSecretKey,
+					'auto_saved' => false,
+					'save_error' => 'Encryption error. Please click Save Settings to persist changes.'
+				];
+			}
+		} else {
 			$response = [
 				'success' => false,
 				'status' => 0,

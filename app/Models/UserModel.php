@@ -228,21 +228,36 @@ class UserModel extends ShieldUserModel
     public function generateUserApiKey(int $userID): ?string
     {
         $user = $this->find($userID);
-        
+
         if (!$user) {
             $this->lastErrors = ['user' => 'User not found'];
             return null;
         }
 
-        $apiKey = generateApiKey(3);
-        $user->api_key = $apiKey;
+        // Load security helper for encryption
+        helper('security');
 
-        if ($this->save($user) === false) {
-            $this->lastErrors = $this->errors();
+        // Generate a 6-character alphanumeric API key
+        $apiKey = generateUserApiKey();
+
+        try {
+            // Encrypt the API key for secure storage
+            $encryptedApiKey = encrypt_secret_key($apiKey, $userID);
+            $user->api_key = $encryptedApiKey;
+
+            if ($this->save($user) === false) {
+                $this->lastErrors = $this->errors();
+                return null;
+            }
+
+            log_message('info', "Generated and encrypted new user API key for user {$userID}");
+            return $apiKey; // Return the unencrypted key for display
+
+        } catch (Exception $e) {
+            log_message('error', "Failed to encrypt user API key for user {$userID}: " . $e->getMessage());
+            $this->lastErrors = ['encryption' => 'Failed to encrypt API key'];
             return null;
         }
-
-        return $apiKey;
     }
 
     /**
@@ -279,7 +294,30 @@ class UserModel extends ShieldUserModel
     public function getUserApiKey(int $userID): ?string
     {
         $user = $this->find($userID);
-        return $user ? $user->api_key : null;
+
+        if (!$user || empty($user->api_key)) {
+            return null;
+        }
+
+        // Load security helper for decryption
+        helper('security');
+
+        try {
+            // Check if the API key is encrypted and decrypt it
+            if (is_encrypted_key($user->api_key)) {
+                $decryptedApiKey = decrypt_secret_key($user->api_key, $userID);
+                log_message('debug', "Decrypted user API key for user {$userID}");
+                return $decryptedApiKey;
+            } else {
+                // Backward compatibility for unencrypted keys
+                log_message('debug', "Returned unencrypted user API key for user {$userID} (backward compatibility)");
+                return $user->api_key;
+            }
+        } catch (Exception $e) {
+            log_message('warning', "Failed to decrypt user API key for user {$userID}: " . $e->getMessage());
+            // Fallback to original value for backward compatibility
+            return $user->api_key;
+        }
     }
 	
     /**

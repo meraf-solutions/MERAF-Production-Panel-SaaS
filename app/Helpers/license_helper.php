@@ -5,56 +5,51 @@ use CodeIgniter\I18n\Time;
 if (!function_exists('generateLicenseKey')) {
     function generateLicenseKey($userID, $prefix= '', $suffix = '', $charsCount = '')
     {
-        // Valid characters for generating the license key
-        $validCharacters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        $validCharsLength = strlen($validCharacters);
+        // Load security helper for enhanced key generation
+        helper('security');
 
         // Set the number of characters
         if($charsCount) {
-            $charsCount = $charsCount;
+            $charsCount = (int) $charsCount;
         }
         else if(getMyConfig('', $userID)['licenseKeyCharsCount']) {
-            $charsCount = getMyConfig('', $userID)['licenseKeyCharsCount'];
+            $charsCount = (int) getMyConfig('', $userID)['licenseKeyCharsCount'];
         }
         else {
-            $charsCount = '40';
-        }     
-    
-        // Generate the random license key using a secure random generator
-        $licenseKey = '';
-        for ($i = 0; $i < $charsCount; $i++) {
-            $randomCharIndex = random_int(0, $validCharsLength - 1);
-            $licenseKey .= $validCharacters[$randomCharIndex];
-        }
-    
-        // Optionally add a prefix
-        if($prefix) {
-            $prefix = $prefix;
-        }
-        else if (getMyConfig('', $userID)['licensePrefix']) {
-            $prefix = getMyConfig('', $userID)['licensePrefix'];
-        }
-        else {
-            $prefix = '';
+            $charsCount = 40;
         }
 
-        // Optionally add a suffix
-        if($suffix) {
-            $suffix = $suffix;
+        // Get prefix from parameters or configuration
+        if(!$prefix && getMyConfig('', $userID)['licensePrefix']) {
+            $prefix = getMyConfig('', $userID)['licensePrefix'];
         }
-        else if (getMyConfig('', $userID)['licenseSuffix']) {
+
+        // Get suffix from parameters or configuration
+        if(!$suffix && getMyConfig('', $userID)['licenseSuffix']) {
             $suffix = getMyConfig('', $userID)['licenseSuffix'];
         }
-        else {
-            $suffix = '';
+
+        try {
+            // Use enhanced secure license key generation
+            return generate_secure_license_key($prefix, $suffix, $charsCount);
+
+        } catch (Exception $e) {
+            // Fallback to original method if secure generation fails
+            log_message('warning', 'Secure license key generation failed, using fallback: ' . $e->getMessage());
+
+            // Original secure method as fallback
+            $validCharacters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            $validCharsLength = strlen($validCharacters);
+
+            $licenseKey = '';
+            for ($i = 0; $i < $charsCount; $i++) {
+                $randomCharIndex = random_int(0, $validCharsLength - 1);
+                $licenseKey .= $validCharacters[$randomCharIndex];
+            }
+
+            return strtoupper($prefix . $licenseKey . $suffix);
         }
-        
-        // Construct the final license key
-        $licenseKey = $prefix . $licenseKey . $suffix;
-    
-        // Return the license key in uppercase
-        return strtoupper($licenseKey);
-    }    
+    }
 }
 
 if (!function_exists('getLicenseData')) {

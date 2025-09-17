@@ -1,18 +1,20 @@
-# MERAF Production Panel - UI/UX Documentation
+# MERAF Production Panel SaaS - UI/UX Documentation
 
-## Interface Overview
+## SaaS Interface Overview
 
-The MERAF Production Panel features a modern, responsive web interface designed for license management and administrative tasks. The interface follows contemporary design patterns with accessibility and usability as core principles.
+The MERAF Production Panel SaaS features a modern, responsive multi-tenant web interface designed for license management, subscription billing, and tenant administration. The interface follows contemporary SaaS design patterns with accessibility, usability, and tenant isolation as core principles.
 
 ## Design System
 
-### Visual Design Principles
+### SaaS Visual Design Principles
 
-1. **Clean & Modern**: Minimalistic design with focus on functionality
-2. **Responsive**: Mobile-first approach with breakpoint-based layouts  
-3. **Accessible**: WCAG compliant with proper ARIA labels and keyboard navigation
-4. **Consistent**: Unified color scheme, typography, and component patterns
-5. **Intuitive**: Self-explanatory navigation and user flows
+1. **Multi-Tenant Aware**: Clear tenant context and data isolation indicators
+2. **Subscription-Focused**: Billing, usage, and package information prominently displayed
+3. **Clean & Modern**: Minimalistic design with focus on SaaS functionality
+4. **Responsive**: Mobile-first approach with breakpoint-based layouts for all devices
+5. **Accessible**: WCAG compliant with proper ARIA labels and keyboard navigation
+6. **Consistent**: Unified color scheme, typography, and component patterns across tenants
+7. **Intuitive**: Self-explanatory navigation and user flows for subscription management
 
 ### Color Scheme & Theming
 
@@ -122,13 +124,13 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica N
 @media (min-width: 1200px) { /* Extra large devices (large desktops) */ }
 ```
 
-## Component Library
+## SaaS Component Library
 
-### Navigation Components
+### Multi-Tenant Navigation Components
 
-#### 1. Sidebar Navigation
+#### 1. SaaS Sidebar Navigation
 ```php
-<!-- Sidebar Structure -->
+<!-- SaaS Sidebar Structure with Tenant Context -->
 <nav id="sidebar" class="sidebar-wrapper sidebar-<?= $sidebarMode ?>">
     <div class="sidebar-content">
         <!-- Brand/Logo -->
@@ -138,18 +140,40 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica N
                 <img src="<?= $myConfig['appLogo_dark'] ?>" class="logo-dark-mode">
             </a>
         </div>
-        
-        <!-- Navigation Menu -->
+
+        <!-- Tenant Context Display -->
+        <div class="tenant-context mb-3 px-3">
+            <div class="tenant-info p-2 bg-light rounded">
+                <small class="text-muted">Current Plan</small>
+                <div class="fw-bold"><?= $userSubscription['package_name'] ?? 'Free Trial' ?></div>
+                <div class="progress progress-sm mt-1">
+                    <div class="progress-bar" style="width: <?= $usagePercentage ?>%"></div>
+                </div>
+                <small class="text-muted"><?= $usedLicenses ?>/<?= $maxLicenses ?> licenses used</small>
+            </div>
+        </div>
+
+        <!-- SaaS Navigation Menu -->
         <ul class="sidebar-menu">
             <li class="active">
-                <a href="/"><i class="ti ti-home me-2"></i>Home</a>
+                <a href="/"><i class="ti ti-dashboard me-2"></i>Dashboard</a>
+            </li>
+            <li>
+                <a href="/licenses"><i class="ti ti-license me-2"></i>My Licenses</a>
+            </li>
+            <li>
+                <a href="/subscription"><i class="ti ti-credit-card me-2"></i>Subscription</a>
             </li>
             <li class="sidebar-dropdown">
                 <a href="javascript:void(0)">
-                    <i class="ti ti-folders me-2"></i>Product Manager
+                    <i class="ti ti-settings me-2"></i>Settings
                 </a>
                 <div class="sidebar-submenu">
-                    <!-- Submenu items -->
+                    <ul>
+                        <li><a href="/settings/general">General</a></li>
+                        <li><a href="/settings/api-keys">API Keys</a></li>
+                        <li><a href="/settings/billing">Billing</a></li>
+                    </ul>
                 </div>
             </li>
         </ul>
@@ -157,7 +181,10 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica N
 </nav>
 ```
 
-**Features**:
+**SaaS Features**:
+- **Tenant Context**: Always visible subscription and usage information
+- **Usage Indicators**: Progress bars showing license utilization
+- **Subscription Focus**: Quick access to billing and subscription management
 - **Collapsible**: Toggle between expanded and collapsed states
 - **Multi-level**: Dropdown support for nested navigation
 - **Active State**: Visual indication of current page
@@ -200,9 +227,137 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica N
 </div>
 ```
 
+### SaaS-Specific Components
+
+#### 1. Subscription Management Panel
+```php
+<div class="subscription-panel card border-0 shadow rounded">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="ti ti-credit-card me-2"></i>
+            Current Subscription
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-8">
+                <h6><?= $subscription['package_name'] ?></h6>
+                <p class="text-muted mb-2"><?= $subscription['description'] ?></p>
+                <div class="d-flex align-items-center mb-3">
+                    <span class="badge bg-success-soft text-success me-2">
+                        <?= ucfirst($subscription['status']) ?>
+                    </span>
+                    <small class="text-muted">
+                        Next billing: <?= date('M j, Y', strtotime($subscription['next_payment_date'])) ?>
+                    </small>
+                </div>
+            </div>
+            <div class="col-md-4 text-end">
+                <h4 class="text-primary">$<?= $subscription['billing_amount'] ?></h4>
+                <small class="text-muted">per <?= $subscription['billing_interval'] ?></small>
+            </div>
+        </div>
+
+        <!-- Usage Statistics -->
+        <div class="usage-stats mt-4">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="usage-item">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small>Licenses</small>
+                            <small><?= $usage['licenses_used'] ?>/<?= $package['max_licenses'] ?></small>
+                        </div>
+                        <div class="progress progress-sm">
+                            <div class="progress-bar" style="width: <?= ($usage['licenses_used']/$package['max_licenses'])*100 ?>%"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="usage-item">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small>Domains</small>
+                            <small><?= $usage['domains_used'] ?>/<?= $package['max_domains'] ?></small>
+                        </div>
+                        <div class="progress progress-sm">
+                            <div class="progress-bar" style="width: <?= ($usage['domains_used']/$package['max_domains'])*100 ?>%"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="usage-item">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small>API Calls</small>
+                            <small><?= number_format($usage['api_calls_today']) ?></small>
+                        </div>
+                        <div class="progress progress-sm">
+                            <div class="progress-bar" style="width: <?= min(($usage['api_calls_today']/1000)*100, 100) ?>%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="mt-4">
+            <button class="btn btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#upgrade-modal">
+                <i class="ti ti-arrow-up-circle me-1"></i>Upgrade Plan
+            </button>
+            <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#billing-modal">
+                <i class="ti ti-receipt me-1"></i>Billing History
+            </button>
+        </div>
+    </div>
+</div>
+```
+
+#### 2. User API Key Management
+```php
+<div class="api-key-section card border-0 shadow rounded">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="ti ti-key me-2"></i>
+            API Key Management
+        </h5>
+    </div>
+    <div class="card-body">
+        <?php if ($userApiKey): ?>
+            <div class="current-key mb-3">
+                <label class="form-label">Your API Key</label>
+                <div class="input-group">
+                    <input type="text" class="form-control" id="api-key-display"
+                           value="<?= $userApiKey ?>" readonly>
+                    <button class="btn btn-outline-secondary" onclick="copyToClipboard('api-key-display')">
+                        <i class="ti ti-copy"></i>
+                    </button>
+                </div>
+                <small class="form-text text-muted">
+                    Use this key in the <code>User-API-Key</code> header for API requests
+                </small>
+            </div>
+            <div class="key-actions">
+                <button class="btn btn-warning me-2" onclick="regenerateApiKey()">
+                    <i class="ti ti-refresh me-1"></i>Regenerate Key
+                </button>
+                <button class="btn btn-danger" onclick="revokeApiKey()">
+                    <i class="ti ti-trash me-1"></i>Revoke Key
+                </button>
+            </div>
+        <?php else: ?>
+            <div class="no-key text-center py-4">
+                <i class="ti ti-key-off text-muted" style="font-size: 3rem;"></i>
+                <p class="text-muted mt-2">No API key generated yet</p>
+                <button class="btn btn-primary" onclick="generateApiKey()">
+                    <i class="ti ti-plus me-1"></i>Generate API Key
+                </button>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+```
+
 ### Form Components
 
-#### 1. License Creation Form
+#### 1. SaaS License Creation Form
 ```php
 <form id="new-license-form" class="needs-validation" novalidate>
     <div class="row g-3">
@@ -309,37 +464,51 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica N
 - **Responsive**: Horizontal scroll on mobile devices
 - **Actions**: Contextual action buttons (edit, delete, view)
 
-## User Experience Flows
+## SaaS User Experience Flows
 
-### 1. Authentication Flow
-
-```
-Login Page → Validation → Dashboard
-     ↓           ↓           ↓
-Session Check → Error Display → Welcome Screen
-     ↓           ↓           ↓
-Redirect      → Retry       → Main Navigation
-```
-
-**UX Features**:
-- **Auto-redirect**: Redirect to intended page after login
-- **Session Management**: Automatic session cleanup on logout
-- **Error Handling**: Clear error messages with recovery options
-- **Security**: reCAPTCHA integration for bot protection
-
-### 2. License Management Flow
+### 1. SaaS Onboarding Flow
 
 ```
-Dashboard → License Manager → Create/Edit Form → Validation → Success/Error
-    ↓            ↓               ↓               ↓           ↓
-Navigation → List View → Form Submission → Processing → Feedback
+Registration → Email Verification → Plan Selection → Payment → Dashboard Setup
+      ↓              ↓                    ↓             ↓           ↓
+User Signup → Activation Link → Package Choice → Billing Info → Welcome Tour
+      ↓              ↓                    ↓             ↓           ↓
+Form Fill → Email Confirmation → Subscription → Payment Gateway → Feature Introduction
 ```
 
-**UX Enhancements**:
-- **Breadcrumb Navigation**: Clear path indication
-- **Form Validation**: Real-time feedback during input
-- **Loading States**: Visual feedback during processing
-- **Success Confirmation**: Clear success/error messaging
+**SaaS Onboarding Features**:
+- **Progressive Registration**: Multi-step signup process
+- **Trial Management**: Free trial activation and conversion tracking
+- **Payment Integration**: Secure payment processing with multiple methods
+- **Feature Tours**: Interactive introduction to key SaaS features
+
+### 2. Subscription Management Flow
+
+```
+Dashboard → Subscription → Usage Review → Plan Selection → Payment Update → Confirmation
+    ↓            ↓              ↓              ↓              ↓              ↓
+Navigation → Current Plan → Limits Check → Upgrade/Downgrade → Billing Update → Success
+```
+
+**Subscription UX Features**:
+- **Usage Visibility**: Clear display of current usage vs limits
+- **Plan Comparison**: Side-by-side feature and pricing comparison
+- **Billing Transparency**: Clear billing history and upcoming charges
+- **Downgrade Protection**: Prevent data loss during plan changes
+
+### 3. Multi-Tenant License Management Flow
+
+```
+Dashboard → My Licenses → Create License → Tenant Validation → License Creation → API Integration
+    ↓            ↓              ↓               ↓                ↓                ↓
+Overview → Tenant View → Limit Check → Owner Verification → Database Insert → Key Display
+```
+
+**Multi-Tenant UX Enhancements**:
+- **Tenant Context**: Always visible current tenant and limits
+- **Usage Awareness**: Real-time feedback on approaching limits
+- **Upgrade Prompts**: Contextual upgrade suggestions when limits reached
+- **API Integration**: Clear documentation and testing tools
 
 ### 3. Theme Switching Flow
 
@@ -386,24 +555,48 @@ if ('serviceWorker' in navigator) {
 }
 ```
 
-### 2. Manifest Configuration
+### 2. SaaS PWA Manifest Configuration
 ```json
 {
-    "name": "MERAF Production Panel",
-    "short_name": "MERAF Panel",
-    "description": "License Management System",
+    "name": "MERAF Production Panel SaaS",
+    "short_name": "MERAF SaaS",
+    "description": "Multi-Tenant License Management SaaS Platform",
     "start_url": "/",
     "display": "standalone",
     "theme_color": "#3B82F6",
     "background_color": "#FFFFFF",
+    "categories": ["business", "productivity", "saas"],
     "icons": [
         {
-            "src": "/assets/images/icon-192x192.png",
+            "src": "/assets/images/pwa-icon-192.png",
             "sizes": "192x192",
             "type": "image/png"
         }
     ]
 }
+```
+
+## SaaS-Specific Design Patterns
+
+### 1. Tenant Isolation Visual Cues
+- **Contextual Headers**: Always display current tenant and subscription status
+- **Usage Indicators**: Progress bars showing resource consumption
+- **Billing Alerts**: Visual warnings for approaching limits or payment issues
+- **Plan Badges**: Clear indication of current subscription tier
+
+### 2. Subscription-Focused Information Architecture
+- **Dashboard Hierarchy**: Subscription info → Usage stats → License management
+- **Upgrade Pathways**: Strategic placement of upgrade prompts and plan comparisons
+- **Billing Transparency**: Clear display of costs, usage, and next billing date
+- **Feature Gating**: Graceful handling of feature limitations based on plan
+
+### 3. Multi-Tenant Data Presentation
+- **Scoped Views**: All data views automatically filtered by tenant
+- **Tenant-Aware URLs**: Clean URLs that include tenant context
+- **Resource Quotas**: Visual indication of limits and remaining capacity
+- **Cross-Tenant Prevention**: Design prevents accidental data mixing
+
+This SaaS UI/UX implementation provides a modern, scalable interface optimized for multi-tenant operations with clear subscription management and tenant isolation patterns.
 ```
 
 **PWA Features**:
