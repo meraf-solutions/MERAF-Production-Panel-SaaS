@@ -1,0 +1,1 @@
+<p class="mb-0 text-muted mt-3 text-center"><?= lang('Pages.footer_copyright', ['year' => date("Y"),'appName' => $myConfig['appName']]) ?></p>

@@ -1,0 +1,32 @@
+<?php
+// <?= lang('Notifications.language_key')
+return [
+    'Offline_Payment_Processed' => 'Su pago offline ha sido procesado con éxito.',
+    'Offline_Payment_Failed' => 'No se pudo procesar el pago offline. Por favor, inténtelo de nuevo.',
+    'Offline_Payment_Pending' => 'Hemos recibido su referencia de transacción completada para verificación. Su pago permanecerá pendiente hasta que verifiquemos el pago. Actualizaremos el estado de su suscripción una vez que se confirme el pago. Se le notificará por correo electrónico a su dirección de correo electrónico registrada',
+    'Offline_Payment_Confirmed' => 'Su pago offline ha sido confirmado. Su suscripción ahora está activa.',
+    'Offline_Payment_Rejected' => 'Su pago offline ha sido rechazado. Por favor, contacte con soporte para más información.',
+    'Offline_Payment_Status_Updated' => 'El estado del pago offline se ha actualizado con éxito.',
+    'Offline_Payment_Status_Update_Failed' => 'No se pudo actualizar el estado del pago offline. Por favor, inténtelo de nuevo.',
+    'Offline_Settings_Saved' => 'La configuración de pago offline se ha guardado con éxito.',
+    'Offline_Settings_Save_Failed' => 'No se pudo guardar la configuración de pago offline. Por favor, inténtelo de nuevo.',
+    'Method_Not_Allowed' => 'El método no está permitido para la ruta solicitada.',
+    'Invalid_Request' => 'Solicitud no válida. Por favor, verifique su entrada e inténtelo de nuevo.',
+    'Subscription_Created' => 'Suscripción creada con éxito.',
+    'Subscription_Creation_Failed' => 'No se pudo crear la suscripción. Por favor, inténtelo de nuevo.',
+    'Payment_Record_Creation_Failed' => 'No se pudo crear el registro de pago. Por favor, inténtelo de nuevo.',
+    'Invalid_Subscription' => 'Suscripción no válida. Por favor, verifique los detalles de la suscripción e inténtelo de nuevo.',
+    'Payment_Update_Failed' => 'No se pudo actualizar el pago. Por favor, inténtelo de nuevo.',
+    'Subscription_Not_Found' => 'No se encontró la suscripción. Por favor, verifique los detalles de la suscripción e inténtelo de nuevo.',
+    'Invalid_Payment_Status' => 'Estado de pago no válido. Por favor, seleccione un estado válido.',
+    'Well_received_reference_ID' => 'Su ID de referencia de pago ha sido bien recibido.',
+    'Subscription_not_pending' => 'La suscripción no está pendiente de verificación de pago offline.',
+    'Refund_Amount_Required' => 'Se requiere el monto de reembolso para el estado de reembolso.',
+    'Offline_Payment_Refunded' => 'El pago offline ha sido reembolsado con éxito.',
+    'Offline_Payment_Refund_Failed' => 'No se pudo reembolsar el pago offline. Por favor, inténtelo de nuevo.',
+    'Invalid_Refund_Amount' => 'Monto de reembolso no válido. Por favor, ingrese un monto válido.',
+    'Refund_Amount_Exceeds_Payment' => 'El monto del reembolso excede el monto del pago original.',
+    'Refund_Processed' => 'Reembolso procesado con éxito.',
+    'Full_Refund_Processed' => 'Reembolso completo procesado. La suscripción ha sido cancelada.',
+    'Partial_Refund_Processed' => 'Reembolso parcial procesado. La suscripción permanece activa.'
+];

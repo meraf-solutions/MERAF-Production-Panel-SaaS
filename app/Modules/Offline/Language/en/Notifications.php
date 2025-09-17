@@ -1,0 +1,32 @@
+<?php
+// <?= lang('Notifications.language_key')
+return [
+    'Offline_Payment_Processed' => 'Your offline payment has been processed successfully.',
+    'Offline_Payment_Failed' => 'Failed to process offline payment. Please try again.',
+    'Offline_Payment_Pending' => 'We have received your completed Transaction Reference for verification. Your payment will remain pending until we verify the payment. We will update your subscription status once the payment is confirmed. You will be notified by email to your registered email address',
+    'Offline_Payment_Confirmed' => 'Your offline payment has been confirmed. Your subscription is now active.',
+    'Offline_Payment_Rejected' => 'Your offline payment has been rejected. Please contact support for more information.',
+    'Offline_Payment_Status_Updated' => 'Offline payment status has been updated successfully.',
+    'Offline_Payment_Status_Update_Failed' => 'Failed to update offline payment status. Please try again.',
+    'Offline_Settings_Saved' => 'Offline payment settings saved successfully.',
+    'Offline_Settings_Save_Failed' => 'Failed to save offline payment settings. Please try again.',
+    'Method_Not_Allowed' => 'The method is not allowed for the requested route.',
+    'Invalid_Request' => 'Invalid request. Please check your input and try again.',
+    'Subscription_Created' => 'Subscription created successfully.',
+    'Subscription_Creation_Failed' => 'Failed to create subscription. Please try again.',
+    'Payment_Record_Creation_Failed' => 'Failed to create payment record. Please try again.',
+    'Invalid_Subscription' => 'Invalid subscription. Please check the subscription details and try again.',
+    'Payment_Update_Failed' => 'Failed to update payment. Please try again.',
+    'Subscription_Not_Found' => 'Subscription not found. Please check the subscription details and try again.',
+    'Invalid_Payment_Status' => 'Invalid payment status. Please select a valid status.',
+    'Well_received_reference_ID' => 'Your payment reference ID is well received.',
+    'Subscription_not_pending' => 'The subscription is not pending for offline payment verification.',
+    'Refund_Amount_Required' => 'Refund amount is required for refund status.',
+    'Offline_Payment_Refunded' => 'The offline payment has been refunded successfully.',
+    'Offline_Payment_Refund_Failed' => 'Failed to refund the offline payment. Please try again.',
+    'Invalid_Refund_Amount' => 'Invalid refund amount. Please enter a valid amount.',
+    'Refund_Amount_Exceeds_Payment' => 'Refund amount exceeds the original payment amount.',
+    'Refund_Processed' => 'Refund processed successfully.',
+    'Full_Refund_Processed' => 'Full refund processed. The subscription has been cancelled.',
+    'Partial_Refund_Processed' => 'Partial refund processed. The subscription remains active.'
+];

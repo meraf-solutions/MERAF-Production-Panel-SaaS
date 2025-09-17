@@ -1,0 +1,62 @@
+<?= $this->extend('layouts/dashboard') ?>
+
+<?= $this->section('head') ?>
+<?= $this->endSection() //End section('head')?>
+
+<?= $this->section('heading') ?>
+<?= $this->endSection() //End section('heading')?>
+
+<?= $this->section('content') ?>
+<?= $this->endSection() //End section('content')?>
+
+<?= $this->section('modals') ?>
+<?= $this->endSection() //End section('modals')?>
+
+<?= $this->section('scripts') ?>
+<?= $this->endSection() //End section('scripts')?>
+
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+<?= $this->extend('layouts/single_page') ?>
+
+<?= $this->section('head') ?>
+<?= $this->endSection() //End section('head')?>
+
+<?= $this->section('content') ?>
+<?= $this->endSection() //End section('content')?>
+
+<?= $this->section('modals') ?>
+<?= $this->endSection() //End section('modals')?>
+
+<?= $this->section('scripts') ?>
+<?= $this->endSection() //End section('scripts')?>
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+<?= $this->extend('layouts/single_page_public') ?>
+
+<?= $this->section('head') ?>
+<?= $this->endSection() //End section('head')?>
+
+<?= $this->section('content') ?>
+<?= $this->endSection() //End section('content')?>
+
+<?= $this->section('modals') ?>
+<?= $this->endSection() //End section('modals')?>
+
+<?= $this->section('scripts') ?>
+<?= $this->endSection() //End section('scripts')?>
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+<?= $this->extend('layouts/auth_page') ?>
+
+<?= $this->section('title') ?>
+<?= $this->endSection() //End section('title')?>
+
+<?= $this->section('head') ?>
+<?= $this->endSection() //End section('head')?>
+
+<?= $this->section('content') ?>
+<?= $this->endSection() //End section('content')?>
+
+<?= $this->section('modals') ?>
+<?= $this->endSection() //End section('modals')?>
+
+<?= $this->section('scripts') ?>
+<?= $this->endSection() //End section('scripts')?>
