@@ -45,8 +45,8 @@ if (! function_exists('base_url')) {
 			<div class="mobile-menu-closer"></div>
 			<div class="content-menu">
 				<div class="content-infos">
-					<div class="info"><b>Version:</b> 1.0.0</div>
-					<div class="info"><b>Last Updated:</b> 28th Mar, 2024</div>
+					<div class="info"><b>Version:</b> 2.1.0</div>
+					<div class="info"><b>Last Updated:</b> 17th Sep, 2025</div>
 				</div>
 				<ul>
 					<li class="scroll-to-link active" data-target="content-get-started">
@@ -57,6 +57,18 @@ if (! function_exists('base_url')) {
 					</li>
 					<li class="scroll-to-link" data-target="content-cronjob-autoexpiry-license">
 						<a>Auto-change the Status of An Expired License</a>
+					</li>
+					<li class="scroll-to-link" data-target="content-cronjob-subscription-expiry">
+						<a>Check Subscription Expiry</a>
+					</li>
+					<li class="scroll-to-link" data-target="content-cronjob-payment-retries">
+						<a>Process Payment Retries</a>
+					</li>
+					<li class="scroll-to-link" data-target="content-cronjob-ip-blocking">
+						<a>Check Abusive IPs</a>
+					</li>
+					<li class="scroll-to-link" data-target="content-cronjob-ip-cleanup">
+						<a>Clean Blocked IPs</a>
 					</li>
                     <li class="scroll-to-link" data-target="content-list-all-user">
 						<a>List All Registered User</a>
@@ -90,50 +102,57 @@ API Endpoint
 						<strong>API Rate Limiting:</strong>
 					</p>
 					<p>
-						To ensure fair usage and maintain optimal performance for all users, our API implements rate limiting. Each IP address is allowed a maximum of 15 requests per minute. Exceeding this limit will result in a Error 429 (Too Many Requests) error response.
+						The SaaS platform implements a tiered rate limiting system based on endpoint categories. Super Admin endpoints follow the management tier limits:
 					</p>
 					<p>
 						<ul>
-							<li><strong>Maximum Requests</strong>: Each IP address is limited to a maximum of 15 requests per minute.</li>
-							<li><strong>Exceeding the Limit</strong>: If the rate limit is exceeded, subsequent requests from the same IP address within the same minute will be rejected with a 429 Too Many Requests status code.</li>
-							<li><strong>Fair Usage:</strong>: Rate limiting helps ensure fair usage of the API and prevents abuse, ensuring a consistent experience for all users.</li>
-							<li><strong>Considerations</strong>: If you anticipate requiring a higher rate limit due to specific use cases or higher traffic volumes, please contact our support team to discuss your requirements.</li>
+							<li><strong>Management Endpoints</strong>: 30 requests per minute per IP address (user management, package operations)</li>
+							<li><strong>Cronjob Endpoints</strong>: 60 requests per minute per IP address (automated tasks)</li>
+							<li><strong>Exceeding Limits</strong>: Returns HTTP 429 (Too Many Requests) error response</li>
+							<li><strong>Security Features</strong>: IP blocking for abusive behavior, automated cleanup</li>
 						</ul>
 					</p>
 					<p>
 						<strong>Modify The API Rate Limit:</strong>
 					</p>
 					<p>
-						You can customize the rate limit as per your requirements by modifying the file
+						You can customize the rate limit by modifying the tiered system in:
 						<code class="higlighted break-word">/app/Filters/APIThrottle.php</code>
 
 						<br>
-						On line #39, change the values according to your needs:
-						<code class="higlighted break-word">15, MINUTE</code>
+						The system uses different limits based on endpoint patterns:
 						<table class="central-overflow-x">
 							<thead>
 							<tr>
-								<th>Value</th>
-								<th>Description</th>
+								<th>Endpoint Type</th>
+								<th>Rate Limit</th>
+								<th>Examples</th>
 							</tr>
 							</thead>
 							<tbody>
 							<tr>
-								<td>15</td>
-								<td>The number of requests allowed</td>
+								<td>Authentication</td>
+								<td>10/minute</td>
+								<td>Login, token verification</td>
 							</tr>
 							<tr>
-								<td>MINUTE</td>
-								<td>The duration of the allowed number of request</td>
+								<td>Management</td>
+								<td>30/minute</td>
+								<td>User/package CRUD operations</td>
+							</tr>
+							<tr>
+								<td>Information</td>
+								<td>60/minute</td>
+								<td>Cronjobs, listing, logs</td>
 							</tr>
 							</tbody>
 						</table>
 					</p>
 					<p>
-						<span style="color: red">NOTE</span>: Do not forget to clear/delete cache after the above changes.
-						<code class="higlighted break-word">/writable/cache/FactoriesCache_config</code>
+						<span style="color: red">NOTE</span>: After making changes, clear the cache:
+						<code class="higlighted break-word">php spark cache:clear</code>
 						<br>
-						<code class="higlighted break-word">/writable/cache/FileLocatorCache</code>
+						Or manually delete: <code class="higlighted break-word">/writable/cache/</code>
 					</p>
 				</div>
 				<div class="overflow-hidden content-section" id="content-cronjob-remind-expiring-license">
@@ -212,6 +231,141 @@ Success result example :
 	"msg": "Auto-expiry cron job run successfully! Updated a total of 2 license(s)."
 }
 						</code></pre>
+				</div>
+				<div class="overflow-hidden content-section" id="content-cronjob-subscription-expiry">
+					<h2>Check Subscription Expiry (cron job)</h2>
+					<pre><code class="bash">
+curl -H 'User-API-Key: 123abc' -X GET '<?= base_url() ?>/cronjob/check_subscription_expiry'
+					</code></pre>
+					<p>
+						To automatically process expired subscriptions and handle billing renewals, follow these steps: <br>
+						<span style="color: red">WARNING</span>: This SaaS-specific task manages subscription billing and tenant access controls.
+					</p>
+					<p>
+						Make a <span class="method-get">GET</span> call to the following url :<br>
+						<code class="higlighted break-word"><?= base_url() ?>/cronjob/check_subscription_expiry</code>
+					</p>
+					<p>
+						This cronjob handles:
+						<ul>
+							<li>Processing expired subscriptions</li>
+							<li>Disabling access for non-paying tenants</li>
+							<li>Sending subscription renewal notifications</li>
+							<li>Managing grace periods for payment processing</li>
+						</ul>
+					</p>
+					<br>
+					<pre><code class="json">
+Success result example :
+
+{
+	"success": true,
+	"status": 1,
+	"msg": "Subscription expiry check completed! Processed 5 expired subscriptions."
+}
+					</code></pre>
+				</div>
+				<div class="overflow-hidden content-section" id="content-cronjob-payment-retries">
+					<h2>Process Payment Retries (cron job)</h2>
+					<pre><code class="bash">
+curl -H 'User-API-Key: 123abc' -X GET '<?= base_url() ?>/cronjob/process_payment_retries'
+					</code></pre>
+					<p>
+						To automatically retry failed payments with exponential backoff strategy: <br>
+						<span style="color: red">WARNING</span>: This manages the automated payment retry system for subscription billing.
+					</p>
+					<p>
+						Make a <span class="method-get">GET</span> call to the following url :<br>
+						<code class="higlighted break-word"><?= base_url() ?>/cronjob/process_payment_retries</code>
+					</p>
+					<p>
+						This cronjob handles:
+						<ul>
+							<li>Retrying failed payment attempts</li>
+							<li>Implementing exponential backoff delays</li>
+							<li>Managing dunning sequences</li>
+							<li>Sending payment failure notifications</li>
+							<li>Suspending accounts after max retry attempts</li>
+						</ul>
+					</p>
+					<br>
+					<pre><code class="json">
+Success result example :
+
+{
+	"success": true,
+	"status": 1,
+	"msg": "Payment retry processing completed! Attempted 12 retries, 8 successful."
+}
+					</code></pre>
+				</div>
+				<div class="overflow-hidden content-section" id="content-cronjob-ip-blocking">
+					<h2>Check Abusive IPs (cron job)</h2>
+					<pre><code class="bash">
+curl -H 'User-API-Key: 123abc' -X GET '<?= base_url() ?>/cronjob/check_abusive_ips'
+					</code></pre>
+					<p>
+						To automatically detect and block abusive IP addresses based on request patterns: <br>
+						<span style="color: red">WARNING</span>: This security feature protects the platform from abuse and attacks.
+					</p>
+					<p>
+						Make a <span class="method-get">GET</span> call to the following url :<br>
+						<code class="higlighted break-word"><?= base_url() ?>/cronjob/check_abusive_ips</code>
+					</p>
+					<p>
+						This cronjob handles:
+						<ul>
+							<li>Analyzing request patterns for abuse detection</li>
+							<li>Blocking IPs exceeding rate limits</li>
+							<li>Identifying potential brute force attacks</li>
+							<li>Protecting against API abuse</li>
+							<li>Maintaining IP whitelist/blacklist</li>
+						</ul>
+					</p>
+					<br>
+					<pre><code class="json">
+Success result example :
+
+{
+	"success": true,
+	"status": 1,
+	"msg": "IP abuse check completed! Blocked 3 abusive IPs, analyzed 1247 requests."
+}
+					</code></pre>
+				</div>
+				<div class="overflow-hidden content-section" id="content-cronjob-ip-cleanup">
+					<h2>Clean Blocked IPs (cron job)</h2>
+					<pre><code class="bash">
+curl -H 'User-API-Key: 123abc' -X GET '<?= base_url() ?>/cronjob/clean_blocked_ips'
+					</code></pre>
+					<p>
+						To automatically clean up old IP blocks and maintain the IP blocking database: <br>
+						<span style="color: red">WARNING</span>: This maintenance task prevents the IP blocking table from growing indefinitely.
+					</p>
+					<p>
+						Make a <span class="method-get">GET</span> call to the following url :<br>
+						<code class="higlighted break-word"><?= base_url() ?>/cronjob/clean_blocked_ips</code>
+					</p>
+					<p>
+						This cronjob handles:
+						<ul>
+							<li>Removing expired IP blocks</li>
+							<li>Cleaning up old abuse records</li>
+							<li>Optimizing IP blocking database performance</li>
+							<li>Maintaining reasonable block durations</li>
+							<li>Preventing database bloat</li>
+						</ul>
+					</p>
+					<br>
+					<pre><code class="json">
+Success result example :
+
+{
+	"success": true,
+	"status": 1,
+	"msg": "IP cleanup completed! Removed 45 expired blocks, cleaned 128 old records."
+}
+					</code></pre>
 				</div>
 				<div class="overflow-hidden content-section" id="content-list-all-user">
 					<h2>List all registered user</h2>

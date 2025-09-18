@@ -68,8 +68,8 @@ if (isset($_COOKIE['meraf_app_info'])) {
 			<div class="mobile-menu-closer"></div>
 			<div class="content-menu">
 				<div class="content-infos">
-					<div class="info"><b>Version:</b> 1.0.0</div>
-					<div class="info"><b>Last Updated:</b> 28th Mar, 2024</div>
+					<div class="info"><b>Version:</b> 2.1.0</div>
+					<div class="info"><b>Last Updated:</b> 17th Sep, 2025</div>
 				</div>
 				<ul>
 					<li class="scroll-to-link active" data-target="content-get-started">
@@ -77,6 +77,15 @@ if (isset($_COOKIE['meraf_app_info'])) {
 					</li>
 					<li class="scroll-to-link" data-target="content-routine-validation">
 						<a>Routine Validation</a>
+					</li>
+					<li class="scroll-to-link" data-target="content-dashboard-data">
+						<a>Dashboard Data</a>
+					</li>
+					<li class="scroll-to-link" data-target="content-user-settings">
+						<a>User Settings</a>
+					</li>
+					<li class="scroll-to-link" data-target="content-subscription-management">
+						<a>Subscription Management</a>
 					</li>
 					<li class="scroll-to-link" data-target="content-list-license">
 						<a>List License</a>
@@ -152,15 +161,46 @@ API Endpoint
 						<strong>Overview:</strong>
 					</p>
 					<p>
-						The <?= $appName ?> API follows the principles of REST architecture. Key features include:
+						The MERAF Production Panel API follows the principles of REST architecture with multi-tenant capabilities. Key features include:
 					</p>
 					<p>
 						<ul>
+							<li><strong>Secure Data Management</strong>: Complete tenant data isolation for privacy and security.</li>
 							<li><strong>Resource-oriented URLs</strong>: The API utilizes predictable URLs to access resources.</li>
 							<li><strong>Form-encoded request bodies</strong>: Requests are encoded using form data.</li>
 							<li><strong>JSON-encoded responses</strong>: Responses from the API are encoded in JSON format.</li>
 							<li><strong>Common HTTP verbs</strong>: Standard HTTP methods such as GET, POST, PUT, and DELETE are used for CRUD operations.</li>
-							<li><strong>API secret key authentication</strong>: Access to the API requires authentication using an API secret key.</li>
+							<li><strong>Dual authentication</strong>: API secret key + User-API-Key for enhanced security.</li>
+							<li><strong>Subscription Integration</strong>: Usage tracking and limit enforcement for billing management.</li>
+							<li><strong>Enhanced Security</strong>: Timing-safe authentication, encrypted storage, IP blocking.</li>
+						</ul>
+					</p>
+					<p>
+						<strong style="color: red">API Rate Limiting:</strong>
+					</p>
+					<p>
+						To ensure fair usage and maintain optimal performance, the API implements a tiered rate limiting system based on endpoint categories:
+					</p>
+					<p>
+						<ul>
+							<li><strong>Authentication Endpoints</strong>: 10 requests per minute per IP address</li>
+							<li><strong>Management Endpoints</strong>: 30 requests per minute per IP address (license creation, editing, deletion)</li>
+							<li><strong>Information Endpoints</strong>: 60 requests per minute per IP address (listing, verification, logs)</li>
+							<li><strong>Exceeding Limits</strong>: Returns HTTP 429 (Too Many Requests) error</li>
+						</ul>
+					</p>
+					<p>
+						<strong style="color: red">Data Privacy & Security:</strong>
+					</p>
+					<p>
+						All API responses are automatically secured and isolated to your account data using the User-API-Key:
+					</p>
+					<p>
+						<ul>
+							<li><strong>Private Data Access</strong>: You can only access your own licenses, settings, and data</li>
+							<li><strong>Secure Authentication</strong>: Dual-layer authentication with API keys for enhanced security</li>
+							<li><strong>Encrypted Storage</strong>: Your sensitive data is encrypted with secure encryption methods</li>
+							<li><strong>Usage Analytics</strong>: Track your API usage and subscription metrics</li>
 						</ul>
 					</p>
 					<p>
@@ -208,6 +248,35 @@ API Endpoint
 							<li><strong>Managing License Data API Secret Key</strong>: Employed for managing license keys, including tasks such as updating, deleting, and listing all licenses.</li>
 							<li><strong>General Info API Secret Key</strong>: Used for general tasks, such as viewing license activity logs and subscriber information.</li>
 						</ol>
+					</p>
+					<p>
+						<strong style="color: red">Enhanced Security Features:</strong>
+					</p>
+					<p>
+						MERAF Production Panel implements multiple layers of security protection beyond basic authentication:
+					</p>
+					<p>
+						<ul>
+							<li><strong>Advanced Authentication</strong>: Secure API key validation with multiple verification layers</li>
+							<li><strong>Encrypted Data Storage</strong>: Your API keys and sensitive data are encrypted using industry-standard methods</li>
+							<li><strong>Abuse Protection</strong>: Automatic detection and blocking of suspicious activity patterns</li>
+							<li><strong>Activity Logging</strong>: All API operations are logged for security and audit purposes</li>
+							<li><strong>Rate Limiting</strong>: Intelligent rate limiting prevents abuse while ensuring optimal performance</li>
+							<li><strong>Input Validation</strong>: Comprehensive validation and sanitization of all API requests</li>
+							<li><strong>Session Management</strong>: Secure session handling with automatic security features</li>
+						</ul>
+					</p>
+					<p>
+						<strong>IP Blocking and Abuse Prevention:</strong>
+					</p>
+					<p>
+						<ul>
+							<li><strong>Smart Detection</strong>: System monitors request patterns to identify potential abuse</li>
+							<li><strong>Flexible Protection</strong>: Adjustable security thresholds for different activity types</li>
+							<li><strong>Progressive Security</strong>: Escalating protection measures based on threat severity</li>
+							<li><strong>Trusted Access</strong>: Support for whitelisting known secure connections</li>
+							<li><strong>Live Monitoring</strong>: Real-time security monitoring and threat detection</li>
+						</ul>
 					</p>
 				</div>
 				<div class="overflow-hidden content-section" id="content-routine-validation">
@@ -276,7 +345,248 @@ Error result example :
 					<p>
 						<span style="color: red">NOTE</span>: The <strong><a href="<?= base_url() ?>/license-manager/activity-logs" target="_blank">Activity Log</a></strong> page under License Manager is distinct from these validation logs. The License Activity log records all activities for each license key, providing a broader overview of license-related actions.
 					</p>					
-				</div>				
+				</div>
+				<div class="overflow-hidden content-section" id="content-dashboard-data">
+					<h2>Dashboard Data</h2>
+					<pre><code class="bash">
+curl -H 'User-API-Key: 123abc' -X GET '<?= base_url() ?>/api/dashboard-data'
+					</code></pre>
+					<p>
+						To retrieve tenant-specific dashboard analytics and metrics, initiate a <span class="method-get">GET</span> request using the following URL:<br>
+						<code class="higlighted break-word">/dashboard-data</code>
+					</p>
+					<p>
+						This endpoint provides comprehensive dashboard data including license statistics, subscription status, recent activities, and usage metrics for the authenticated tenant.
+					</p>
+					<br>
+					<pre><code class="json">
+Success result example :
+
+{
+    "license_stats": {
+        "total": 25,
+        "active": 18,
+        "expired": 4,
+        "pending": 2,
+        "blocked": 1
+    },
+    "subscription": {
+        "package_name": "Professional",
+        "status": "active",
+        "expires_at": "2025-12-17 12:00:00",
+        "usage": {
+            "licenses_used": 18,
+            "licenses_limit": 100,
+            "storage_used": "2.4 GB",
+            "storage_limit": "10 GB"
+        }
+    },
+    "recent_activities": [
+        {
+            "type": "license_created",
+            "description": "New license created for Product ABC",
+            "timestamp": "2025-09-17 10:30:00"
+        }
+    ],
+    "alerts": [
+        {
+            "type": "subscription_expiring",
+            "message": "Your subscription expires in 30 days",
+            "priority": "medium"
+        }
+    ]
+}
+
+Error result example :
+
+{
+    "result": "error",
+    "message": "Unauthorized access",
+    "error_code": 403
+}
+					</code></pre>
+					<p>
+						<span style="color: red">NOTE</span>: This endpoint requires User-API-Key authentication and returns data specific to the authenticated tenant only.
+					</p>
+				</div>
+				<div class="overflow-hidden content-section" id="content-user-settings">
+					<h2>User Settings</h2>
+					<pre><code class="bash">
+# Get user settings
+curl -H 'User-API-Key: 123abc' -X GET '<?= base_url() ?>/api/user/settings'
+
+# Update user settings
+curl -H 'User-API-Key: 123abc' -X POST '<?= base_url() ?>/api/user/settings' \
+-H 'Content-Type: application/x-www-form-urlencoded' \
+-d 'timezone=UTC&locale=en&email_notifications=true'
+					</code></pre>
+					<p>
+						To retrieve or update tenant-specific settings and preferences:<br>
+						<code class="higlighted break-word">GET /user/settings</code> - Retrieve current settings<br>
+						<code class="higlighted break-word">POST /user/settings</code> - Update settings
+					</p>
+					<br>
+					<pre><code class="json">
+Success result example (GET):
+
+{
+    "timezone": "UTC",
+    "locale": "en",
+    "email_notifications": true,
+    "default_license_status": "active",
+    "default_allowed_domains": 1,
+    "default_allowed_devices": 0,
+    "license_key_format": "alphanumeric",
+    "license_key_length": 40,
+    "package_info": {
+        "name": "Professional",
+        "features": ["license_management", "api_access", "email_support"]
+    }
+}
+
+Success result example (POST):
+
+{
+    "result": "success",
+    "message": "Settings updated successfully",
+    "updated_settings": ["timezone", "email_notifications"]
+}
+
+Error result example :
+
+{
+    "result": "error",
+    "message": "Invalid timezone value",
+    "error_code": 400
+}
+					</code></pre>
+					<h4>SETTABLE PARAMETERS (POST)</h4>
+					<table class="central-overflow-x">
+						<thead>
+						<tr>
+							<th>Field</th>
+							<th>Type</th>
+							<th>Description</th>
+						</tr>
+						</thead>
+						<tbody>
+						<tr>
+							<td>timezone</td>
+							<td>String</td>
+							<td>User timezone (e.g., "UTC", "America/New_York")</td>
+						</tr>
+						<tr>
+							<td>locale</td>
+							<td>String</td>
+							<td>Language locale (e.g., "en", "es", "fr")</td>
+						</tr>
+						<tr>
+							<td>email_notifications</td>
+							<td>Boolean</td>
+							<td>Enable/disable email notifications</td>
+						</tr>
+						<tr>
+							<td>default_license_status</td>
+							<td>String</td>
+							<td>Default status for new licenses (active, pending, blocked)</td>
+						</tr>
+						</tbody>
+					</table>
+				</div>
+				<div class="overflow-hidden content-section" id="content-subscription-management">
+					<h2>Subscription Management</h2>
+					<pre><code class="bash">
+# Check subscription status
+curl -H 'User-API-Key: 123abc' -X GET '<?= base_url() ?>/api/subscription/status'
+
+# Get usage analytics
+curl -H 'User-API-Key: 123abc' -X GET '<?= base_url() ?>/api/subscription/usage'
+
+# Check feature limits
+curl -H 'User-API-Key: 123abc' -X GET '<?= base_url() ?>/api/subscription/limits'
+					</code></pre>
+					<p>
+						The subscription management endpoints provide access to billing information, usage tracking, and feature limits:
+					</p>
+					<p>
+						<ul>
+							<li><code class="higlighted break-word">GET /subscription/status</code> - Current subscription details</li>
+							<li><code class="higlighted break-word">GET /subscription/usage</code> - Usage analytics and tracking</li>
+							<li><code class="higlighted break-word">GET /subscription/limits</code> - Feature limits and restrictions</li>
+						</ul>
+					</p>
+					<br>
+					<pre><code class="json">
+Subscription Status example:
+
+{
+    "subscription_id": "sub_123456",
+    "package_name": "Professional",
+    "status": "active",
+    "billing_period": "monthly",
+    "current_period_start": "2025-09-01 00:00:00",
+    "current_period_end": "2025-10-01 00:00:00",
+    "next_payment_date": "2025-10-01 00:00:00",
+    "amount": "29.99",
+    "currency": "USD",
+    "payment_method": "PayPal",
+    "trial_end": null,
+    "auto_renewal": true
+}
+
+Usage Analytics example:
+
+{
+    "period": "2025-09",
+    "usage": {
+        "licenses_created": 15,
+        "licenses_limit": 100,
+        "api_calls": 2843,
+        "api_calls_limit": 10000,
+        "storage_used_mb": 2458,
+        "storage_limit_mb": 10240
+    },
+    "daily_usage": [
+        {"date": "2025-09-01", "licenses": 2, "api_calls": 145},
+        {"date": "2025-09-02", "licenses": 1, "api_calls": 203}
+    ]
+}
+
+Feature Limits example:
+
+{
+    "package": "Professional",
+    "limits": {
+        "max_licenses": 100,
+        "max_api_calls_per_month": 10000,
+        "max_storage_mb": 10240,
+        "features": {
+            "license_management": true,
+            "api_access": true,
+            "email_support": true,
+            "phone_support": false,
+            "custom_branding": false
+        }
+    },
+    "current_usage": {
+        "licenses": 15,
+        "api_calls_this_month": 2843,
+        "storage_used_mb": 2458
+    }
+}
+
+Error result example :
+
+{
+    "result": "error",
+    "message": "Subscription not found or expired",
+    "error_code": 404
+}
+					</code></pre>
+					<p>
+						<span style="color: red">NOTE</span>: Subscription endpoints automatically enforce usage limits. When limits are exceeded, license creation and other operations may be restricted.
+					</p>
+				</div>
 				<div class="overflow-hidden content-section" id="content-list-license">
 					<h2>List license</h2>
 					<pre><code class="bash">
@@ -709,6 +1019,21 @@ curl -H 'User-API-Key: 123abc' -X GET '<?= base_url() ?>/api/license/create/{sec
 						To create a new license, initiate a <span class="method-get">GET</span> request to the following URL:<br>
 						<code class="higlighted break-word">/license/create/{secret_key}/data?{field_parameters}</code>
 					</p>
+					<p>
+						<strong style="color: red">Subscription Integration:</strong>
+					</p>
+					<p>
+						License creation includes automatic subscription validation and usage tracking:
+					</p>
+					<p>
+						<ul>
+							<li><strong>Usage Limits</strong>: Checks current license count against subscription limits</li>
+							<li><strong>Feature Access</strong>: Validates license management feature availability in user's package</li>
+							<li><strong>Usage Tracking</strong>: Automatically tracks license creation for billing analytics</li>
+							<li><strong>Trial Restrictions</strong>: Enforces trial account limitations</li>
+							<li><strong>Auto-Blocking</strong>: Prevents creation if subscription is expired or limits exceeded</li>
+						</ul>
+					</p>
 					<br>
 					<pre><code class="json">
 Success result example :
@@ -729,11 +1054,27 @@ Error result example (product not found) :
 }
 
 Error result example (no value for date_expiry) :
-	
+
 {
 	"result": "error",
 	"message": "License creation failed. Specify license 'date_expiry'.",
 	"error_code": 10
+}
+
+Error result example (subscription limit exceeded) :
+
+{
+	"result": "error",
+	"message": "License creation failed. You have reached your subscription limit of 100 licenses.",
+	"error_code": 429
+}
+
+Error result example (subscription expired) :
+
+{
+	"result": "error",
+	"message": "License creation failed. Your subscription has expired. Please renew to continue.",
+	"error_code": 403
 }
 
 
@@ -885,6 +1226,20 @@ curl -X POST '<?= base_url() ?>/api/license/edit/{secret_key}' \
 					<p>
 						To edit/modify the license details, initiate a <span class="method-post">POST</span> request to the following URL:<br>
 						<code class="higlighted break-word">/license/edit/{secret_key}</code>
+					</p>
+					<p>
+						<strong style="color: red">Subscription Integration:</strong>
+					</p>
+					<p>
+						License editing includes validation against your subscription features and usage tracking:
+					</p>
+					<p>
+						<ul>
+							<li><strong>Feature Validation</strong>: Ensures modifications are allowed under current subscription</li>
+							<li><strong>Audit Logging</strong>: Tracks license modifications for compliance and billing</li>
+							<li><strong>Secure Access</strong>: Only allows editing of licenses owned by your authenticated account</li>
+							<li><strong>Usage Analytics</strong>: Records modification patterns for subscription analytics</li>
+						</ul>
 					</p>
 					<br>
 					<pre><code class="json">
@@ -1647,7 +2002,7 @@ Error result example :
 				<div class="overflow-hidden content-section" id="content-errors">
 					<h2>Errors</h2>
 					<p>
-						The <?= $appName ?> API uses the following error codes:
+						The MERAF Production Panel API uses the following error codes:
 					</p>
 					<table>
 						<thead>
