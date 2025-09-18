@@ -278,45 +278,106 @@ if (!function_exists('allProductCurrentVersions')) {
 }
 
 if (!function_exists('getProductFiles')) {
-	function getProductFiles($product='', $userID = NULL) 
+	function getProductFiles($product='', $userID = NULL, $includeFileInfo = false)
 	{
         // Get the logged in user's settings
         $userID = $userID === NULL ? auth()->id() : $userID;
-        
+
         $myConfig = getMyConfig('', $userID);
 
         $userDataPath = USER_DATA_PATH . $userID . DIRECTORY_SEPARATOR;
 
 		$productFiles = [];
-	
+
 		$productList = productList($userID);
-	
+
 		foreach ($productList as $productIndividual) {
 			$productIndividualPath = $userDataPath . $myConfig['userProductPath'] . $productIndividual;
-            
+
 			// Check if the directory exists
 			if (is_dir($productIndividualPath)) {
 				// Get all files in the directory
 				$files = scandir($productIndividualPath);
-	
+
 				// Filter out the files you want to exclude (e.g., 'index.php', '.', '..')
 				$filteredFiles = array_filter($files, function ($file) {
 					return $file !== 'index.php' && $file !== '.' && $file !== '..';
 				});
-	
-				// Store the list of files for each product in the array
-				$productFiles[$productIndividual] = $filteredFiles;
+
+				if ($includeFileInfo) {
+					// Store file information including size
+					$fileDetails = [];
+					foreach ($filteredFiles as $file) {
+						$filePath = $productIndividualPath . DIRECTORY_SEPARATOR . $file;
+						if (is_file($filePath)) {
+							$fileDetails[] = [
+								'name' => $file,
+								'size' => filesize($filePath),
+								'formatted_size' => formatFileSize(filesize($filePath)),
+								'modified' => filemtime($filePath)
+							];
+						}
+					}
+					$productFiles[$productIndividual] = $fileDetails;
+				} else {
+					// Store the list of files for each product in the array (legacy behavior)
+					$productFiles[$productIndividual] = array_values($filteredFiles);
+				}
 			}
 		}
-		
+
 		if($product !== '') {
-			return $productFiles[$product];
+			return $productFiles[$product] ?? [];
 		}
 		else {
 			return $productFiles;
 		}
 	}
 }
+
+if (!function_exists('formatFileSize')) {
+	function formatFileSize($bytes, $precision = 2)
+	{
+		$units = array('B', 'KB', 'MB', 'GB', 'TB', 'PB');
+
+		for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
+			$bytes /= 1024;
+		}
+
+		return round($bytes, $precision) . ' ' . $units[$i];
+	}
+}
+
+if (!function_exists('getTotalProductFolderSize')) {
+	function getTotalProductFolderSize($userID = NULL)
+	{
+		$userID = $userID === NULL ? auth()->id() : $userID;
+		$myConfig = getMyConfig('', $userID);
+		$userDataPath = USER_DATA_PATH . $userID . DIRECTORY_SEPARATOR;
+		$totalSize = 0;
+
+		$productList = productList($userID);
+
+		foreach ($productList as $productIndividual) {
+			$productIndividualPath = $userDataPath . $myConfig['userProductPath'] . $productIndividual;
+
+			if (is_dir($productIndividualPath)) {
+				$files = scandir($productIndividualPath);
+				foreach ($files as $file) {
+					if ($file !== 'index.php' && $file !== '.' && $file !== '..') {
+						$filePath = $productIndividualPath . DIRECTORY_SEPARATOR . $file;
+						if (is_file($filePath)) {
+							$totalSize += filesize($filePath);
+						}
+					}
+				}
+			}
+		}
+
+		return $totalSize;
+	}
+}
+
 
 if (!function_exists('getProductGuide')) {
     function getProductGuide($product, $userID) 

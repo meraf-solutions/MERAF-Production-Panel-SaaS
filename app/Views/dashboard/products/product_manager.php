@@ -221,17 +221,22 @@
                     </div>
 
                     <div class="card rounded shadow p-4 border-0 mb-3">
-                        <h4 class="mb-3"><?= lang('Pages.Version_files') ?></h4>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h4 class="mb-0"><?= lang('Pages.Version_files') ?></h4>
+                            <div id="total-size-display" class="text-muted small">
+                                <strong><?= lang('Pages.Total_Used_Space') ?>:</strong> <span id="total-size-value"><?= $totalSizeFormatted ?? '0 B' ?></span>
+                            </div>
+                        </div>
                         <div class="row gy-3">
 
                             <div class="col-12" id="no-selected-file-responseMsg">
                                     <?php if(!$selectedProduct) { ?>
-                                
+
                                         <div class="alert bg-soft-primary fade show text-center" role="alert"><?= lang('Pages.Select_product_to_view_files') ?></div>
-                                    
+
                                 <?php } ?>
                             </div>
-                                                                        
+
                             <div class="col-12" id="table-file-wrapper" <?= !$selectedProduct ? 'style="display:none"' : '' ?>>
                                 <div class="table-responsive rounded">
                                     <form novalidate="" action="javascript:void(0)" id="delete-file-form">
@@ -245,26 +250,55 @@
                                                         </div>
                                                     </th>
                                                     <th class="border-bottom" style="min-width: 200px;"><?= lang('Pages.File_Name') ?></th>
+                                                    <th class="border-bottom" style="width: 120px;"><?= lang('Pages.File_Size') ?></th>
+                                                    <th class="border-bottom" style="width: 100px;"><?= lang('Pages.Actions') ?></th>
                                                 </tr>
                                             </thead>
 
                                             <tbody id="product-file-list">
-                                                <?php if($selectedProduct) { 
+                                                <?php if($selectedProduct) {
                                                         if(isset($productFiles) && !empty($productFiles) && array_key_exists($selectedProduct, $productFiles)) {
-                                                            foreach($productFiles[$selectedProduct] as $productFile) { ?>
-                                                                <tr>
+                                                            // Check if using new enhanced format (with file info) or legacy format
+                                                            $fileList = $productFiles[$selectedProduct];
+                                                            foreach($fileList as $index => $fileData) {
+                                                                // Handle both legacy (string) and new (array) formats
+                                                                $fileName = is_array($fileData) ? $fileData['name'] : $fileData;
+                                                                $fileSize = is_array($fileData) ? $fileData['formatted_size'] : 'N/A';
+                                                                ?>
+                                                                <tr data-filename="<?= htmlspecialchars($fileName) ?>">
                                                                     <td class="p-3">
                                                                         <div class="form-check">
-                                                                            <input class="form-check-input" type="checkbox" value="<?= urldecode($productFile) ?>" id="<?= urldecode($productFile) ?>" name="<?= urldecode($productFile) ?>">
+                                                                            <input class="form-check-input" type="checkbox" value="<?= urldecode($fileName) ?>" id="<?= urldecode($fileName) ?>" name="<?= urldecode($fileName) ?>">
                                                                         </div>
                                                                     </td>
 
                                                                     <td class="align-middle">
-                                                                        <label for="<?= $productFile ?>" class="form-label"><?= $productFile ?>
-                                                                            <small class="text-muted"> [ <a href="<?= base_url('download/' . $selectedProduct . '/' . $productFile) ?>"><?= lang('Pages.download') ?></a> ]</small>
-                                                                        </label>
+                                                                        <div class="file-name-cell">
+                                                                            <span class="file-name-display"><?= htmlspecialchars($fileName) ?></span>
+                                                                            <input type="text" class="form-control form-control-sm file-name-input d-none" value="<?= htmlspecialchars($fileName) ?>">
+                                                                            <?php
+                                                                            // Check if this file is the current changelog file for the selected product
+                                                                            $isCurrentChangelogFile = isset($currentChangelogFiles[$selectedProduct]) &&
+                                                                                                        $currentChangelogFiles[$selectedProduct] === $fileName;
+                                                                            if ($isCurrentChangelogFile): ?>
+                                                                                <i class="uil uil-star text-warning" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-original-title="<?= lang('Pages.Current_changelog_file') ?>"></i>
+                                                                            <?php endif; ?>                                                                             
+                                                                            <small class="text-muted d-block">
+                                                                                [ <a href="<?= base_url('download/' . $selectedProduct . '/' . $fileName) ?>"><?= lang('Pages.download') ?></a> ]
+                                                                            </small>
+                                                                        </div>
                                                                     </td>
-                                                                </tr>                                                                            
+
+                                                                    <td class="align-middle text-end">
+                                                                        <span class="file-size-display"><?= $fileSize ?></span>
+                                                                    </td>
+
+                                                                    <td class="align-middle">
+                                                                        <button class="btn btn-outline-primary btn-sm rename-file-btn" data-filename="<?= htmlspecialchars($fileName) ?>" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-original-title="<?= lang('Pages.Rename') ?>">
+                                                                            <i class="uil uil-edit"></i>
+                                                                        </button>                                                                       
+                                                                    </td>
+                                                                </tr>
                                                     <?php }
                                                     }
                                                 }
@@ -485,6 +519,40 @@
             </div>
         </div>
     </div>
+
+    <!-- Rename File Modal -->
+    <div class="modal fade" id="rename-file-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded shadow border-0">
+                <div class="modal-header border-bottom">
+                    <h5 class="modal-title">Rename File</h5>
+                    <button type="button" class="btn btn-icon btn-close" data-bs-dismiss="modal"><i class="uil uil-times fs-4 text-dark"></i></button>
+                </div>
+                <div class="modal-body py-4">
+                    <form id="rename-file-form">
+                        <input type="hidden" id="rename-product-name" name="productName">
+                        <input type="hidden" id="rename-old-filename" name="oldFileName">
+                        <input type="hidden" id="rename-file-extension" name="fileExtension">
+
+                        <div class="mb-3">
+                            <label for="rename-new-filename" class="form-label">New File Name (without extension)</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="rename-new-filename" name="newFileNameOnly" required>
+                                <span class="input-group-text" id="file-extension-display">.ext</span>
+                            </div>
+                            <div class="invalid-feedback">Please enter a valid file name.</div>
+                        </div>
+
+                        <div class="text-end">
+                            <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary" id="rename-file-submit">Rename File</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
 <?= $this->endSection() //End section('modals')?>
 
 <?= $this->section('scripts') ?>
@@ -686,6 +754,12 @@
 
                         // Update the global variable
                         completeFileList = JSON.stringify(response.current_files);
+
+                        // Update total size if provided
+                        if (response.total_size_formatted) {
+                            $('#total-size-value').text(response.total_size_formatted);
+                        }
+
                         listFilesAvailable();
 
                         // Show individual file upload results if available
@@ -786,7 +860,12 @@
 
                             // Update the global variable
                             completeFileList = JSON.stringify(response.current_files);
-                            
+
+                            // Update total size if provided
+                            if (response.total_size_formatted) {
+                                $('#total-size-value').text(response.total_size_formatted);
+                            }
+
                             listFilesAvailable();
                             
                             // Update delete button state
@@ -1474,10 +1553,15 @@
                 method: 'POST',
                 success: function (response) {
                     if (response.success) {
-                        completeFileList = response.current_files;
+                        completeFileList = JSON.stringify(response.current_files);
 
-                        if (selectedProduct in completeFileList) {
-                            const productFiles = completeFileList[selectedProduct];
+                        // Update total size display
+                        if (response.total_size_formatted) {
+                            $('#total-size-value').text(response.total_size_formatted);
+                        }
+
+                        if (selectedProduct in response.current_files) {
+                            const productFiles = response.current_files[selectedProduct];
                             let filesHtml = '';
 
                             if (
@@ -1495,32 +1579,20 @@
                             }
 
                             // Build HTML for the product files
-                            $.each(productFiles, function (key, value) {
-                                filesHtml += `
-                                    <tr>
-                                        <td class="p-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" value="${value}" id="${value}" name="${value}">
-                                            </div>
-                                        </td>
-                                        <td class="align-middle">
-                                            <label for="${value}" class="form-label">
-                                                ${value}
-                                                <small class="text-muted">
-                                                    [ <a href="<?= base_url('download/') ?>${selectedProduct}/${value}">
-                                                        <?= lang('Pages.download') ?>
-                                                    </a> ]
-                                                </small>
-                                            </label>
-                                        </td>
-                                    </tr>
-                                `;
+                            $.each(productFiles, function (key, fileData) {
+                                var fileName = typeof fileData === 'object' ? fileData.name : fileData;
+                                var fileSize = typeof fileData === 'object' ? fileData.formatted_size : 'N/A';
+
+                                filesHtml += buildFileRowHtml(fileName, fileSize);
                             });
 
                             tableContent.html(filesHtml);
                             $('#checkAll').prop('checked', false);
                             tableWrapper.slideDown();
                             noSelectedProductNotification.hide();
+
+                            // Attach event listeners for the new buttons
+                            attachFileActionListeners();
                         } else {
                             // Product not found
                             tableWrapper.hide();
@@ -1531,7 +1603,6 @@
                             `).slideDown();
                         }
                     } else {
-                        
                         noSelectedProductNotification.hide();
                         showToast('danger', response.msg);
                     }
@@ -1540,7 +1611,7 @@
                     showToast('danger', '<?= lang('Pages.ajax_no_response') ?>' + status.toUpperCase() + ' ' + xhr.status);
                 },
                 complete: function () {
-                    tableWrapper.hide();
+                    // Don't hide table wrapper here - let success/error handling control visibility
                 }
             });
         }
@@ -1623,23 +1694,20 @@
         }
 
         function listFilesAvailable() {
-            // console.log(completeFileList);
-
             var tableContent = $('#product-file-list');
             var tableWrapper = $('#table-file-wrapper');
             var noSelectedProductNotification = $('#no-selected-file-responseMsg');
-            
+
             tableWrapper.hide();
             noSelectedProductNotification.hide();
 
             if(completeFileList !== '') {
                 // Parse the JSON string into an object
                 var allProductFiles = JSON.parse(completeFileList);
-                
+
                 if(selectedProduct !== '' && selectedProduct in allProductFiles) {
-                    // console.log('Loading files for: ' + selectedProduct);
                     var productFiles = allProductFiles[selectedProduct];
-                    
+
                     // Check if the product has files
                     if(Array.isArray(productFiles) && productFiles.length === 0) {
                         // No files for this product (empty array)
@@ -1650,47 +1718,49 @@
                     } else if($.isEmptyObject(productFiles)) {
                         // No files for this product (empty object)
                         tableWrapper.hide();
-                        // noSelectedProductNotification.hide();
                         noSelectedProductNotification.html('<div class="alert bg-warning fade show text-center" role="alert"><?= lang('Pages.no_files_in_the_product') ?></div>');
                         noSelectedProductNotification.slideDown();
                     } else {
                         // Build HTML for the list of product files
                         var filesHtml = '';
-                        
+
                         // Handle both array and object formats
                         if(Array.isArray(productFiles)) {
-                            // If productFiles is an array
-                            $.each(productFiles, function(key, value) {
-                                filesHtml += '<tr>';
-                                filesHtml += '<td class="p-3"><div class="form-check"><input class="form-check-input" type="checkbox" value="' + value + '" id="'+ value +'" name="'+ value +'"></div></td>';
-                                filesHtml += '<td class="align-middle"><label for="'+ value +'" class="form-label">' + value + '<small class="text-muted"> [ <a href="<?= base_url('download/') ?>'+selectedProduct+'/'+value+'"><?= lang('Pages.download') ?></a> ]</small></label></td>';
-                                filesHtml += '</tr>';
+                            $.each(productFiles, function(key, fileData) {
+                                // Handle both legacy (string) and new (object with file info) formats
+                                var fileName = typeof fileData === 'object' ? fileData.name : fileData;
+                                var fileSize = typeof fileData === 'object' ? fileData.formatted_size : 'N/A';
+
+                                filesHtml += buildFileRowHtml(fileName, fileSize);
                             });
                         } else {
                             // If productFiles is an object with numeric keys
-                            $.each(productFiles, function(key, value) {
-                                filesHtml += '<tr>';
-                                filesHtml += '<td class="p-3"><div class="form-check"><input class="form-check-input" type="checkbox" value="' + value + '" id="'+ value +'" name="'+ value +'"></div></td>';
-                                filesHtml += '<td class="align-middle"><label for="'+ value +'" class="form-label">' + value + '<small class="text-muted"> [ <a href="<?= base_url('download/') ?>'+selectedProduct+'/'+value+'"><?= lang('Pages.download') ?></a> ]</small></label></td>';
-                                filesHtml += '</tr>';
+                            $.each(productFiles, function(key, fileData) {
+                                var fileName = typeof fileData === 'object' ? fileData.name : fileData;
+                                var fileSize = typeof fileData === 'object' ? fileData.formatted_size : 'N/A';
+
+                                filesHtml += buildFileRowHtml(fileName, fileSize);
                             });
                         }
-                        
+
                         // Update the content of the product files div
                         tableContent.html(filesHtml);
-                        
+
                         $('#checkAll').prop('checked', false);
-                        
+
                         // Show the table wrapper
                         tableWrapper.slideDown();
-                        
+
                         // Hide any notification
                         noSelectedProductNotification.hide();
+
+                        // Attach event listeners for the new buttons
+                        attachFileActionListeners();
                     }
                 } else {
                     // No product selected or product not found in the list
                     tableWrapper.hide();
-                    
+
                     if(selectedProduct === '') {
                         // No product selected
                         noSelectedProductNotification.hide();
@@ -1708,6 +1778,115 @@
                 fetchProductFiles();
             }
         }
+
+        function buildFileRowHtml(fileName, fileSize) {
+            // Check if this file is the current changelog file for the selected product
+            var currentChangelogFiles = <?= json_encode($currentChangelogFiles ?? []) ?>;
+            var isCurrentChangelogFile = currentChangelogFiles[selectedProduct] === fileName;
+            var starIcon = isCurrentChangelogFile ? '<i class="uil uil-star text-warning ms-2" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-original-title="<?= lang('Pages.Current_changelog_file') ?>"></i>' : '';
+
+            return `
+                <tr data-filename="${fileName}">
+                    <td class="p-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" value="${fileName}" id="${fileName}" name="${fileName}">
+                        </div>
+                    </td>
+                    <td class="align-middle">
+                        <div class="file-name-cell">
+                            <span class="file-name-display">${fileName}</span>
+                            <input type="text" class="form-control form-control-sm file-name-input d-none" value="${fileName}">
+                            ${starIcon}
+                            <small class="text-muted d-block">
+                                [ <a href="<?= base_url('download/') ?>${selectedProduct}/${fileName}"><?= lang('Pages.download') ?></a> ]
+                            </small>
+                        </div>
+                    </td>
+                    <td class="align-middle text-end">
+                        <span class="file-size-display">${fileSize}</span>
+                    </td>
+                    <td class="align-middle">
+                        <button class="btn btn-outline-primary btn-sm rename-file-btn" data-filename="${fileName}" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-original-title="<?= lang('Pages.Rename') ?>">
+                            <i class="uil uil-edit"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }
+
+        function attachFileActionListeners() {
+            // Rename file button listeners
+            $('.rename-file-btn').off('click').on('click', function() {
+                var fileName = $(this).data('filename');
+                openRenameModal(fileName);
+            });
+
+            // Initialize tooltips for star icons
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        }
+
+        function openRenameModal(fileName) {
+            // Extract filename without extension
+            var lastDotIndex = fileName.lastIndexOf('.');
+            var nameWithoutExtension = lastDotIndex > 0 ? fileName.substring(0, lastDotIndex) : fileName;
+            var fileExtension = lastDotIndex > 0 ? fileName.substring(lastDotIndex) : '';
+
+            $('#rename-product-name').val(selectedProduct);
+            $('#rename-old-filename').val(fileName);
+            $('#rename-new-filename').val(nameWithoutExtension);
+            $('#rename-file-extension').val(fileExtension); // Store extension separately
+            $('#file-extension-display').text(fileExtension); // Show extension in display
+            $('#rename-file-modal').modal('show');
+        }
+
+
+        // Rename file form submission
+        $('#rename-file-form').on('submit', function(e) {
+            e.preventDefault();
+
+            var submitButton = $('#rename-file-submit');
+            enableLoadingEffect(submitButton);
+
+            // Combine filename without extension + extension
+            var newFileNameOnly = $('#rename-new-filename').val().trim();
+            var fileExtension = $('#rename-file-extension').val();
+            var newFullFileName = newFileNameOnly + fileExtension;
+
+            var formData = new FormData();
+            formData.append('productName', $('#rename-product-name').val());
+            formData.append('oldFileName', $('#rename-old-filename').val());
+            formData.append('newFileName', newFullFileName);
+
+            $.ajax({
+                url: '<?= base_url('product-manager/rename-product-file') ?>',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    if (response.success) {
+                        showToast('success', response.msg);
+                        $('#rename-file-modal').modal('hide');
+
+                        // Update the global file list
+                        completeFileList = JSON.stringify(response.current_files);
+                        listFilesAvailable();
+
+                        if (response.changelog_updated) {
+                            showToast('info', '<?= lang('Pages.Changelog_urls_updated') ?>');
+                        }
+                    } else {
+                        showToast('danger', response.msg);
+                    }
+                },
+                error: function() {
+                    showToast('danger', 'Error renaming file.');
+                },
+                complete: function() {
+                    disableLoadingEffect(submitButton);
+                }
+            });
+        });
         
         // Check/uncheck all checkboxes when "checkAll" is clicked
         $('#checkAll').on('change', function () {

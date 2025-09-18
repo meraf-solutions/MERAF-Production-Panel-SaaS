@@ -1320,8 +1320,38 @@ class Home extends BaseController
 		$data['myConfig'] = $this->myConfig;
 		$data['productVariations'] = $this->productVariations();
 		$data['selectedProduct'] = $selectedProduct;
-		$data['productFiles'] = getProductFiles('', $this->userID);
-		
+		$data['productFiles'] = getProductFiles('', $this->userID, true);
+
+		// Calculate total used space for display
+		$totalSize = getTotalProductFolderSize($this->userID);
+		$data['totalSizeFormatted'] = formatFileSize($totalSize);
+
+		// Get current changelog files for all products using existing productDetails
+		$productDetails = productDetails(NULL, $this->userID);
+		$currentChangelogFiles = [];
+
+		foreach ($productDetails as $productName => $details) {
+			if (isset($details['url']) && !empty($details['url'])) {
+				// Extract filename from URL
+				$baseUrl = base_url('download/' . $productName . '/');
+				if (strpos($details['url'], $baseUrl) === 0) {
+					$fileName = str_replace($baseUrl, '', $details['url']);
+					// Decode URL-encoded characters like %20 (space) to match local filenames
+					$fileName = urldecode($fileName);
+					$currentChangelogFiles[$productName] = $fileName;
+				} else {
+					// Fallback: extract filename from path
+					$pathInfo = pathinfo(parse_url($details['url'], PHP_URL_PATH));
+					if (isset($pathInfo['basename'])) {
+						// Decode URL-encoded characters
+						$fileName = urldecode($pathInfo['basename']);
+						$currentChangelogFiles[$productName] = $fileName;
+					}
+				}
+			}
+		}
+		$data['currentChangelogFiles'] = $currentChangelogFiles;
+
 		return view('dashboard/products/product_manager', $data);		
 	}
 
@@ -1416,7 +1446,9 @@ public function version_files_action()
 				'status' => $anySuccess ? 1 : 0,
 				'msg' => $anySuccess ? lang('Notifications.success_upload_release_package', ['productName' => $productName]) : $msgResponse_uploadError,
 				'fileResults' => $fileResults,
-				'current_files' => getProductFiles(),
+				'current_files' => getProductFiles('', $this->userID, true),
+				'total_size' => getTotalProductFolderSize($this->userID),
+				'total_size_formatted' => formatFileSize(getTotalProductFolderSize($this->userID)),
 			]);
 		}
 
@@ -1462,14 +1494,18 @@ public function version_files_action()
 				'success' => true,
 				'status' => 1,
 				'msg' => lang('Notifications.success_upload_release_package', ['productName' => $productName]),
-				'current_files' => getProductFiles(),
+				'current_files' => getProductFiles('', $this->userID, true),
+				'total_size' => getTotalProductFolderSize($this->userID),
+				'total_size_formatted' => formatFileSize(getTotalProductFolderSize($this->userID)),
 			]);
 		} else {
 			return $this->response->setJSON([
 				'success' => false,
 				'status' => 0,
 				'msg' => $msgResponse_uploadError,
-				'current_files' => getProductFiles(),
+				'current_files' => getProductFiles('', $this->userID, true),
+				'total_size' => getTotalProductFolderSize($this->userID),
+				'total_size_formatted' => formatFileSize(getTotalProductFolderSize($this->userID)),
 			]);
 		}
 	}		
@@ -1477,7 +1513,7 @@ public function version_files_action()
 	public function list_product_files()
 	{
 		$this->checkIfLoggedIn(); // Ensure user is authenticated
-	
+
 		if ($this->request->getMethod() !== 'POST') {
 			$response = [
 				'success' => false,
@@ -1487,23 +1523,211 @@ public function version_files_action()
 			];
 			return $this->response->setJSON($response);
 		}
-	
+
+		// Get product files with detailed information including file sizes
+		$productFiles = getProductFiles('', $this->userID, true);
+		$totalSize = getTotalProductFolderSize($this->userID);
+
 		if (!empty($productFiles)) {
 			$response = [
 				'success' => true,
 				'msg' => lang('Notifications.success_retrieved_the_file_list'),
-				'current_files' => getProductFiles('', $this->userID),
+				'current_files' => $productFiles,
+				'total_size' => $totalSize,
+				'total_size_formatted' => formatFileSize($totalSize),
 			];
 		} else {
 			$response = [
 				'success' => false,
 				'msg' => lang('Notifications.error_no_product_found'),
 				'current_files' => [],
+				'total_size' => 0,
+				'total_size_formatted' => '0 B',
 			];
 		}
-	
+
 		return $this->response->setJSON($response);
-	}	
+	}
+
+	public function rename_product_file()
+	{
+		$this->checkIfLoggedIn(); // Ensure user is authenticated
+
+		if ($this->request->getMethod() !== 'POST') {
+			return $this->response->setJSON([
+				'success' => false,
+				'msg' => lang('Notifications.Method_Not_Allowed'),
+			]);
+		}
+
+		$productName = trim($this->request->getPost('productName'));
+		$oldFileName = trim($this->request->getPost('oldFileName'));
+		$newFileName = trim($this->request->getPost('newFileName'));
+
+		// Validation
+		if (empty($productName) || empty($oldFileName) || empty($newFileName)) {
+			return $this->response->setJSON([
+				'success' => false,
+				'msg' => lang('Notifications.error_submitted_details'),
+			]);
+		}
+
+		// Check if product exists
+		$productList = productList($this->userID);
+		if (!in_array($productName, $productList)) {
+			return $this->response->setJSON([
+				'success' => false,
+				'msg' => lang('Notifications.error_product_not_found'),
+			]);
+		}
+
+		$uploadedFilePath = $this->userDataPath . $this->myConfig['userProductPath'] . $productName . '/';
+		$oldFilePath = $uploadedFilePath . $oldFileName;
+		$newFilePath = $uploadedFilePath . $newFileName;
+
+		// Check if old file exists
+		if (!file_exists($oldFilePath)) {
+			return $this->response->setJSON([
+				'success' => false,
+				'msg' => 'Original file not found.',
+			]);
+		}
+
+		// Check if new filename already exists
+		if (file_exists($newFilePath)) {
+			return $this->response->setJSON([
+				'success' => false,
+				'msg' => 'A file with the new name already exists.',
+			]);
+		}
+
+		// Perform the rename
+		if (rename($oldFilePath, $newFilePath)) {
+			// Check and update changelog URLs if needed
+			$changelogUpdated = $this->updateChangelogUrls($productName, $oldFileName, $newFileName);
+
+			return $this->response->setJSON([
+				'success' => true,
+				'msg' => 'File renamed successfully.',
+				'changelog_updated' => $changelogUpdated,
+				'current_files' => getProductFiles('', $this->userID, true),
+				'total_size_formatted' => formatFileSize(getTotalProductFolderSize($this->userID)),
+			]);
+		} else {
+			return $this->response->setJSON([
+				'success' => false,
+				'msg' => 'Failed to rename file.',
+			]);
+		}
+	}
+
+
+	private function updateChangelogUrls($productName, $oldFileName, $newFileName)
+	{
+		try {
+			// Get product changelog file path
+			$changelogFile = $this->userDataPath . $this->myConfig['userProductPath'] . sha1($productName, false) . '.json';
+
+			if (!file_exists($changelogFile)) {
+				return false;
+			}
+
+			$changelogContent = file_get_contents($changelogFile);
+			$changelogData = json_decode($changelogContent, true);
+
+			if (!$changelogData) {
+				return false;
+			}
+
+			$updated = false;
+			// Create base URL with encoded product name (as it appears in actual URLs)
+			$baseUrl = base_url('download/' . urlencode($productName) . '/');
+
+			// Check and update the main product URL key if it contains the old filename
+			foreach ($changelogData as $productKey => &$productData) {
+				if (isset($productData['url'])) {
+					$currentUrl = $productData['url'];
+
+					// Extract the filename from the URL (last part after the last slash)
+					$urlParts = parse_url($currentUrl);
+					$urlPath = $urlParts['path'] ?? '';
+					$currentFilename = basename($urlPath);
+
+					// Decode URL-encoded filename for comparison
+					$currentFilenameDecoded = urldecode($currentFilename);
+
+					// Check if the current URL contains the old filename
+					if ($currentFilenameDecoded === $oldFileName || $currentFilename === $oldFileName) {
+						// Replace the filename in the URL while preserving the rest
+						$newUrl = dirname($currentUrl) . '/' . urlencode($newFileName);
+						$productData['url'] = $newUrl;
+						$updated = true;
+					}
+				}
+
+				// Search and replace URLs in changelog content
+				if (isset($productData['changelog'])) {
+					// Use more flexible string replacement for filenames in changelog content
+					$oldFilenameEncoded = urlencode($oldFileName);
+					$newFilenameEncoded = urlencode($newFileName);
+
+					// Replace both encoded and non-encoded filenames in changelog content
+					if (strpos($productData['changelog'], $oldFileName) !== false) {
+						$productData['changelog'] = str_replace($oldFileName, $newFileName, $productData['changelog']);
+						$updated = true;
+					}
+					if (strpos($productData['changelog'], $oldFilenameEncoded) !== false) {
+						$productData['changelog'] = str_replace($oldFilenameEncoded, $newFilenameEncoded, $productData['changelog']);
+						$updated = true;
+					}
+				}
+			}
+
+			if ($updated) {
+				file_put_contents($changelogFile, json_encode($changelogData, JSON_PRETTY_PRINT));
+			}
+
+			return $updated;
+		} catch (Exception $e) {
+			return false;
+		}
+	}
+
+	private function findFileInChangelog($productName, $fileName)
+	{
+		try {
+			$changelogFile = $this->userDataPath . $this->myConfig['userProductPath'] . sha1($productName, false) . '.json';
+
+			if (!file_exists($changelogFile)) {
+				return [];
+			}
+
+			$changelogContent = file_get_contents($changelogFile);
+			$changelogData = json_decode($changelogContent, true);
+
+			if (!$changelogData) {
+				return [];
+			}
+
+			$affectedUrls = [];
+			$baseUrl = base_url('download/' . $productName . '/');
+			$fileUrl = $baseUrl . $fileName;
+
+			foreach ($changelogData as $entry) {
+				if (isset($entry['changelog']) && strpos($entry['changelog'], $fileUrl) !== false) {
+					$affectedUrls[] = [
+						'version' => $entry['version'] ?? 'Unknown',
+						'date' => $entry['date'] ?? 'Unknown',
+						'changelog_excerpt' => substr($entry['changelog'], 0, 200) . '...',
+					];
+				}
+			}
+
+			return $affectedUrls;
+		} catch (Exception $e) {
+			return [];
+		}
+	}
 
 	public function delete_product_files_action()
 	{
@@ -1546,7 +1770,9 @@ public function version_files_action()
 					'msg' => lang('Notifications.success_deleted_file'),
 					'deleted_files' => $deletedFiles,
 					'failed_files' => $failedFiles,
-					'current_files' => getProductFiles('', $this->userID),
+					'current_files' => getProductFiles('', $this->userID, true),
+			'total_size' => getTotalProductFolderSize($this->userID),
+			'total_size_formatted' => formatFileSize(getTotalProductFolderSize($this->userID)),
 				];
 			} else {
 				$response = [
@@ -1555,7 +1781,9 @@ public function version_files_action()
 					'msg' => lang('Notifications.error_deleting_file'),
 					'deleted_files' => $deletedFiles,
 					'failed_files' => $failedFiles,
-					'current_files' => getProductFiles('', $this->userID),
+					'current_files' => getProductFiles('', $this->userID, true),
+			'total_size' => getTotalProductFolderSize($this->userID),
+			'total_size_formatted' => formatFileSize(getTotalProductFolderSize($this->userID)),
 				];
 			}
 		} else {
@@ -1565,7 +1793,9 @@ public function version_files_action()
 				'msg' => lang('Notifications.error_no_file_selected_for_deletion'),
 				'deleted_files' => $deletedFiles,
 				'failed_files' => $failedFiles,
-				'current_files' => getProductFiles('', $this->userID),
+				'current_files' => getProductFiles('', $this->userID, true),
+			'total_size' => getTotalProductFolderSize($this->userID),
+			'total_size_formatted' => formatFileSize(getTotalProductFolderSize($this->userID)),
 			];
 		}
 
@@ -1721,7 +1951,9 @@ public function version_files_action()
 				'success' => true,
 				'status' => 1,
 				'msg' => lang('Notifications.success_new_product_creation', ['productName' => $productName]),
-				'current_files' => getProductFiles('', $this->userID),
+				'current_files' => getProductFiles('', $this->userID, true),
+			'total_size' => getTotalProductFolderSize($this->userID),
+			'total_size_formatted' => formatFileSize(getTotalProductFolderSize($this->userID)),
 			];
 
 			return $this->response->setJSON($response);
@@ -1846,7 +2078,9 @@ public function version_files_action()
 			'success' => true,
 			'status' => 1,
 			'msg' => lang('Notifications.success_deleting_product', ['productName' => $productName]),
-			'current_files' => getProductFiles('', $this->userID),
+			'current_files' => getProductFiles('', $this->userID, true),
+			'total_size' => getTotalProductFolderSize($this->userID),
+			'total_size_formatted' => formatFileSize(getTotalProductFolderSize($this->userID)),
 		]);
 	}
 	
@@ -1900,7 +2134,9 @@ public function version_files_action()
 					'oldProductName' => $oldProductName, 
 					'newProductName' => $newProductName
 				]),
-				'current_files' => getProductFiles('', $this->userID),
+				'current_files' => getProductFiles('', $this->userID, true),
+			'total_size' => getTotalProductFolderSize($this->userID),
+			'total_size_formatted' => formatFileSize(getTotalProductFolderSize($this->userID)),
 			]);
 	
 		} catch (Exception $e) {

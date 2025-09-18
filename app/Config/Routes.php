@@ -189,6 +189,7 @@ $routes->get('download/(:segment)/(:segment)', 'Home::serve/$1/$2');
 $routes->post('product-manager/new-product-action', 'Home::new_product_action');
 $routes->post('product-manager/version-files-action', 'Home::version_files_action');
 $routes->post('product-manager/delete-product-files-action', 'Home::delete_product_files_action');
+$routes->post('product-manager/rename-product-file', 'Home::rename_product_file');
 $routes->post('product-manager/rename-product-action', 'Home::rename_product_action');
 $routes->post('product-manager/delete-whole-product-action', 'Home::delete_whole_product_action');
 $routes->post('product-manager/variations/save', 'Home::set_product_variations_action');
