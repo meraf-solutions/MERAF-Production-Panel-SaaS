@@ -239,18 +239,90 @@ $response = file_get_contents("https://your-saas.com/api/license/validate/{secre
 ```
 
 ### Subscription Management API
+
+The SaaS platform provides comprehensive subscription management through three REST API endpoints:
+
+#### 1. Subscription Status API
+Get detailed subscription information including package details and billing status:
 ```php
 // Check subscription status
 $response = file_get_contents(
-    "https://your-saas.com/api/subscription/status",
+    "https://your-saas.com/subscription/status",
     false, stream_context_create(['http' => ['header' => 'User-API-Key: ABC123']])
 );
 
+$data = json_decode($response, true);
+echo "Package: " . $data['data']['package']['package_name'];
+echo "Status: " . $data['data']['subscription']['subscription_status'];
+echo "Days Remaining: " . $data['data']['days_remaining'];
+```
+
+#### 2. Usage Analytics API
+Monitor feature usage with daily breakdown and trend analysis:
+```php
 // Get usage analytics
 $usage = file_get_contents(
-    "https://your-saas.com/api/subscription/usage",
+    "https://your-saas.com/subscription/usage",
     false, stream_context_create(['http' => ['header' => 'User-API-Key: ABC123']])
 );
+
+$analytics = json_decode($usage, true);
+foreach ($analytics['data']['current_usage'] as $feature => $count) {
+    echo "{$feature}: {$count} used\n";
+}
+```
+
+#### 3. Feature Limits API
+Check feature availability and usage limits in real-time:
+```php
+// Check feature limits
+$limits = file_get_contents(
+    "https://your-saas.com/subscription/limits",
+    false, stream_context_create(['http' => ['header' => 'User-API-Key: ABC123']])
+);
+
+$features = json_decode($limits, true);
+foreach ($features['data']['features'] as $feature => $details) {
+    if ($details['can_use']) {
+        echo "{$feature}: {$details['remaining']} remaining\n";
+    } else {
+        echo "{$feature}: LIMIT EXCEEDED\n";
+    }
+}
+```
+
+#### JavaScript/Fetch Examples
+```javascript
+// Modern async/await API usage
+const apiKey = 'ABC123';
+const baseUrl = 'https://your-saas.com';
+
+const getSubscriptionData = async () => {
+    try {
+        // Get all subscription data in parallel
+        const [status, usage, limits] = await Promise.all([
+            fetch(`${baseUrl}/subscription/status`, {
+                headers: { 'User-API-Key': apiKey }
+            }),
+            fetch(`${baseUrl}/subscription/usage`, {
+                headers: { 'User-API-Key': apiKey }
+            }),
+            fetch(`${baseUrl}/subscription/limits`, {
+                headers: { 'User-API-Key': apiKey }
+            })
+        ]);
+
+        const [statusData, usageData, limitsData] = await Promise.all([
+            status.json(),
+            usage.json(),
+            limits.json()
+        ]);
+
+        return { statusData, usageData, limitsData };
+    } catch (error) {
+        console.error('API Error:', error);
+    }
+};
 ```
 
 ### Multi-Tenant License Validation
@@ -299,6 +371,10 @@ fetch('/api/license/validate/SECRET_KEY/LICENSE_KEY', {
 - **Subscription Limits** - Automatic enforcement of package limits
 - **Usage Reports** - Detailed analytics for tenants and admins
 - **Overage Handling** - Upgrade prompts and overage billing
+- **REST API Access** - Three dedicated endpoints for subscription management:
+  - `/subscription/status` - Complete subscription and package information
+  - `/subscription/usage` - Usage analytics with daily breakdown and trends
+  - `/subscription/limits` - Feature limits with real-time availability status
 
 ## Testing
 
@@ -399,9 +475,12 @@ Configure payment gateway webhooks:
 
 Comprehensive SaaS documentation is available:
 
-- **[CLAUDE.md](CLAUDE.md)** - Complete development guide and architecture
-- **[docs/SUBSCRIPTION_API.md](docs/SUBSCRIPTION_API.md)** - API reference
-- **[docs/DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md)** - Development guidelines
+- **[CLAUDE.md](CLAUDE.md)** - Complete development guide and coding patterns
+- **[docs/api.md](docs/api.md)** - Complete API reference including subscription endpoints
+- **[docs/architecture.md](docs/architecture.md)** - System architecture and multi-tenant design
+- **[docs/technical.md](docs/technical.md)** - Technical implementation details
+- **[docs/SUBSCRIPTION_API.md](docs/SUBSCRIPTION_API.md)** - Subscription business logic libraries
+- **[docs/DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md)** - Development workflow and team processes
 
 ## Support
 

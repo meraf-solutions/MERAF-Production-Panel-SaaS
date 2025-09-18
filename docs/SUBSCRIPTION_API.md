@@ -1,6 +1,8 @@
-# Subscription System API Documentation
+# Subscription System Libraries Documentation
 
-This document provides comprehensive documentation for the enhanced subscription system libraries and their APIs.
+This document provides comprehensive documentation for the enhanced subscription system business logic libraries.
+
+**Note**: For subscription API endpoints documentation, see [docs/api.md](api.md#subscription-management-api).
 
 ## Table of Contents
 

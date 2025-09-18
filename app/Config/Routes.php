@@ -282,6 +282,11 @@ $routes->group("api", function ($routes) {
     $routes->get("product/changelog/(:segment)/(:segment)", 'Api::fetchProductChangelog/$1/$2');
     $routes->get("variation/all", 'Api::listVariations');
 
+    // Subscription Management API
+    $routes->get("subscription/status", 'Api::subscriptionStatus');
+    $routes->get("subscription/usage", 'Api::subscriptionUsage');
+    $routes->get("subscription/limits", 'Api::subscriptionLimits');
+
     // Super Admin Only
     $routes->get("user/all/(:any)", 'Api::listUsers/$1');
     $routes->get("package/all/(:any)", 'Api::listPackages/$1');

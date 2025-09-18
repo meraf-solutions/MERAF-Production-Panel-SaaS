@@ -136,7 +136,7 @@ if (!function_exists('getMyConfig')) {
                             // Check if the value is encrypted and decrypt it
                             if (is_encrypted_key($value)) {
                                 $value = decrypt_secret_key($value, $userID);
-                                log_message('debug', "Decrypted secret key '{$setting->key}' for display to user {$userID}");
+                                // log_message('debug', "Decrypted secret key '{$setting->key}' for display to user {$userID}");
                             }
                         } catch (Exception $e) {
                             // If decryption fails, keep the original value (backward compatibility)

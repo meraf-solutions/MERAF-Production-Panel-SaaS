@@ -130,6 +130,132 @@ Content-Type: application/json
 **Purpose**: Update user's application settings
 **Authentication**: User API Key (header)
 
+#### Subscription Management API
+
+**Endpoint**: `GET /subscription/status`
+**Purpose**: Returns comprehensive subscription information including package details, payment status, and subscription timeline
+**Authentication**: User API Key (header)
+
+**Response Format**:
+```json
+{
+    "status": "success",
+    "data": {
+        "subscription": {
+            "id": 42,
+            "package_id": 3,
+            "subscription_status": "active",
+            "amount_paid": "29.99",
+            "billing_period": 30,
+            "start_date": "2025-01-15 10:30:00",
+            "end_date": "2025-02-14 10:30:00",
+            "next_payment_date": "2025-02-14 10:30:00",
+            "auto_renewal": 1,
+            "payment_method": "PayPal",
+            "trial_used": 0,
+            "retry_count": 0
+        },
+        "package": {
+            "id": 3,
+            "package_name": "Professional Plan",
+            "price": "29.99",
+            "billing_period": 30,
+            "is_active": 1,
+            "package_modules": [
+                {
+                    "category": "License Management",
+                    "module_name": "License_Creation",
+                    "module_limits": {
+                        "value": 100,
+                        "unit": "licenses"
+                    }
+                }
+            ]
+        },
+        "days_remaining": 30,
+        "is_trial": false,
+        "can_renew": true
+    }
+}
+```
+
+**Endpoint**: `GET /subscription/usage`
+**Purpose**: Returns detailed usage analytics with daily breakdown for the current billing period
+**Authentication**: User API Key (header)
+
+**Response Format**:
+```json
+{
+    "status": "success",
+    "data": {
+        "billing_period": {
+            "start_date": "2025-01-15",
+            "end_date": "2025-02-14",
+            "days_elapsed": 4,
+            "days_remaining": 26
+        },
+        "current_usage": {
+            "License_Creation": 45,
+            "Product_Management": 12,
+            "Email_Marketing": 8
+        },
+        "daily_breakdown": [
+            {
+                "date": "2025-01-15",
+                "License_Creation": 12,
+                "Product_Management": 3,
+                "Email_Marketing": 2
+            }
+        ],
+        "usage_trends": {
+            "License_Creation": {
+                "avg_daily": 11.25,
+                "projected_monthly": 337,
+                "trend": "increasing"
+            }
+        }
+    }
+}
+```
+
+**Endpoint**: `GET /subscription/limits`
+**Purpose**: Returns feature limits, current usage, and real-time availability status for all package features
+**Authentication**: User API Key (header)
+
+**Response Format**:
+```json
+{
+    "status": "success",
+    "data": {
+        "features": {
+            "License_Creation": {
+                "limit": 100,
+                "current_usage": 45,
+                "remaining": 55,
+                "percentage_used": 45,
+                "unlimited": false,
+                "can_use": true,
+                "unit": "licenses"
+            }
+        },
+        "overall_status": {
+            "subscription_active": true,
+            "any_limits_exceeded": false,
+            "features_approaching_limit": ["License_Creation"],
+            "recommended_action": "monitor_usage"
+        },
+        "alerts": [
+            {
+                "type": "warning",
+                "feature": "License_Creation",
+                "message": "You have used 45% of your license creation limit",
+                "threshold": 40
+            }
+        ]
+    }
+}
+```
+
 ### 1. Routine Validation (Special Endpoint)
 
 #### Validate License with Domain/Device

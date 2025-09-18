@@ -2926,16 +2926,16 @@ class Api extends ResourceController
         try {
             if($targetLicense) {
                 
-                // reformat the date_expiry if present
-                if ( ($postedData['date_expiry'] !== null) && ($postedData['date_expiry'] !== '') && $postedData['license_type'] !== 'lifetime') {
+                // reformat the date_expiry if present and needed
+                if ( isset($postedData['date_expiry']) && ($postedData['date_expiry'] !== null) && ($postedData['date_expiry'] !== '') && $postedData['license_type'] !== 'lifetime') {
                     // User's timezone from configuration
 
                     // First check session for detected timezone
                     $session = session();
-					$userTimezone = $session->get('detected_timezone') ?? 
-									$this->myConfig['defaultTimezone'] ?? 
+					$userTimezone = $session->get('detected_timezone') ??
+									$this->myConfig['defaultTimezone'] ??
 									'UTC';
-                    
+
                     // App's default timezone
                     $appTimezone = app_timezone();
 
@@ -2973,8 +2973,8 @@ class Api extends ResourceController
                         // Set the time to the same as the creation date
                         $postedData['date_expiry'] = $expirationDate
                             ->setTime(
-                                $dateCreated->getHour(), 
-                                $dateCreated->getMinute(), 
+                                $dateCreated->getHour(),
+                                $dateCreated->getMinute(),
                                 $dateCreated->getSecond()
                             )
                             ->format('Y-m-d H:i:s');
@@ -2983,13 +2983,14 @@ class Api extends ResourceController
                         $postedData['date_expiry'] = $expirationDate->format('Y-m-d H:i:s');
                     }
                 }
-                else {
+                // For non-lifetime licenses that require expiry dates, check if date_expiry is provided
+                elseif ($postedData['license_type'] !== 'lifetime' && (!isset($postedData['date_expiry']) || $postedData['date_expiry'] === null || $postedData['date_expiry'] === '')) {
                     $response = [
                         'result'     => 'error',
-                        'message'    => lang('Notifications.incorrectDateFormatEditLicense'),
+                        'message'    => 'License detail update failed. Specify license date_expiry for non-lifetime licenses.',
                         'error_code' => KEY_UPDATE_FAILED
                     ];
-                    
+
                     return $this->respondCreated($response);
                 }
 
@@ -3318,6 +3319,295 @@ class Api extends ResourceController
     }
 
     /**
+     * Get subscription status
+     * URI: /api/subscription/status
+     * Method: GET
+     */
+    public function subscriptionStatus()
+    {
+        $this->userID = $this->getUserID();
+
+        if(!$this->userID) {
+            $response = [
+                'result' => 'error',
+                'message' => 'User authentication required',
+                'error_code' => 403
+            ];
+            return $this->respondCreated($response);
+        }
+
+        try {
+            // Get user's active subscription
+            $subscription = $this->SubscriptionModel->getActiveByUserId($this->userID);
+
+            if (!$subscription) {
+                $response = [
+                    'result' => 'error',
+                    'message' => 'No active subscription found',
+                    'error_code' => 404
+                ];
+                return $this->respondCreated($response);
+            }
+
+            // Get package information
+            $package = $this->PackageModel->find($subscription['package_id']);
+
+            if (!$package) {
+                $response = [
+                    'result' => 'error',
+                    'message' => 'Package not found',
+                    'error_code' => 404
+                ];
+                return $this->respondCreated($response);
+            }
+
+            // Format subscription status response
+            $subscriptionData = [
+                'subscription_id' => $subscription['subscription_reference'],
+                'package_name' => $package['package_name'],
+                'status' => $subscription['subscription_status'],
+                'billing_period' => strtolower($subscription['billing_cycle']),
+                'current_period_start' => $subscription['start_date'],
+                'current_period_end' => $subscription['end_date'],
+                'next_payment_date' => $subscription['next_payment_date'],
+                'amount' => number_format((float)$subscription['amount_paid'], 2, '.', ''),
+                'currency' => $subscription['currency'],
+                'payment_method' => $subscription['payment_method'],
+                'trial_end' => $subscription['trial_ends_at'],
+                'auto_renewal' => $subscription['subscription_status'] === 'active'
+            ];
+
+            return $this->respondCreated($subscriptionData);
+
+        } catch (\Exception $e) {
+            log_message('error', '[API] Subscription status error: ' . $e->getMessage());
+            $response = [
+                'result' => 'error',
+                'message' => 'Failed to retrieve subscription status',
+                'error_code' => 500
+            ];
+            return $this->respondCreated($response);
+        }
+    }
+
+    /**
+     * Get subscription usage analytics
+     * URI: /api/subscription/usage
+     * Method: GET
+     */
+    public function subscriptionUsage()
+    {
+        $this->userID = $this->getUserID();
+
+        if(!$this->userID) {
+            $response = [
+                'result' => 'error',
+                'message' => 'User authentication required',
+                'error_code' => 403
+            ];
+            return $this->respondCreated($response);
+        }
+
+        try {
+            // Get user's active subscription
+            $subscription = $this->SubscriptionModel->getActiveByUserId($this->userID);
+
+            if (!$subscription) {
+                $response = [
+                    'result' => 'error',
+                    'message' => 'No active subscription found',
+                    'error_code' => 404
+                ];
+                return $this->respondCreated($response);
+            }
+
+            // Use SubscriptionUsageTracker to get usage data
+            $usageTracker = new \App\Libraries\SubscriptionUsageTracker();
+            $subscriptionChecker = new \App\Libraries\SubscriptionChecker();
+
+            // Get current month usage
+            $currentMonth = date('Y-m');
+
+            // Get usage statistics
+            $licenseCount = $this->LicensesModel->where('owner_id', $this->userID)->countAllResults();
+            $licenseLimit = $subscriptionChecker->getLimit($this->userID, 'Product_Count_Limit', 'value') ?? 0;
+
+            // Get API calls (estimate from logs if available)
+            $apiCalls = 0; // You may want to implement actual API call tracking
+            $apiCallsLimit = 10000; // Default limit, can be made configurable
+
+            // Get storage usage (approximate from user directory if available)
+            $storageUsedMb = 0;
+            $storageUserDir = FCPATH . '../user-data/' . $this->userID;
+            if (is_dir($storageUserDir)) {
+                $storageUsedMb = $this->getDirectorySize($storageUserDir) / 1024 / 1024;
+            }
+            $storageLimitMb = $subscriptionChecker->getLimit($this->userID, 'File_Storage', 'value') ?? 1024;
+
+            // Get daily usage for the current month (simplified)
+            $dailyUsage = [];
+            $daysInMonth = date('t');
+            for ($day = 1; $day <= min($daysInMonth, date('j')); $day++) {
+                $date = sprintf('%s-%02d', $currentMonth, $day);
+                $dailyLicenses = 0; // Could be enhanced with actual daily tracking
+                $dailyApiCalls = 0; // Could be enhanced with actual daily tracking
+
+                $dailyUsage[] = [
+                    'date' => $date,
+                    'licenses' => $dailyLicenses,
+                    'api_calls' => $dailyApiCalls
+                ];
+            }
+
+            $usageData = [
+                'period' => $currentMonth,
+                'usage' => [
+                    'licenses_created' => $licenseCount,
+                    'licenses_limit' => $licenseLimit,
+                    'api_calls' => $apiCalls,
+                    'api_calls_limit' => $apiCallsLimit,
+                    'storage_used_mb' => round($storageUsedMb, 2),
+                    'storage_limit_mb' => $storageLimitMb
+                ],
+                'daily_usage' => $dailyUsage
+            ];
+
+            return $this->respondCreated($usageData);
+
+        } catch (\Exception $e) {
+            log_message('error', '[API] Subscription usage error: ' . $e->getMessage());
+            $response = [
+                'result' => 'error',
+                'message' => 'Failed to retrieve usage analytics',
+                'error_code' => 500
+            ];
+            return $this->respondCreated($response);
+        }
+    }
+
+    /**
+     * Get subscription feature limits
+     * URI: /api/subscription/limits
+     * Method: GET
+     */
+    public function subscriptionLimits()
+    {
+        $this->userID = $this->getUserID();
+
+        if(!$this->userID) {
+            $response = [
+                'result' => 'error',
+                'message' => 'User authentication required',
+                'error_code' => 403
+            ];
+            return $this->respondCreated($response);
+        }
+
+        try {
+            // Get user's active subscription
+            $subscription = $this->SubscriptionModel->getActiveByUserId($this->userID);
+
+            if (!$subscription) {
+                $response = [
+                    'result' => 'error',
+                    'message' => 'No active subscription found',
+                    'error_code' => 404
+                ];
+                return $this->respondCreated($response);
+            }
+
+            // Get package information
+            $package = $this->PackageModel->find($subscription['package_id']);
+
+            if (!$package) {
+                $response = [
+                    'result' => 'error',
+                    'message' => 'Package not found',
+                    'error_code' => 404
+                ];
+                return $this->respondCreated($response);
+            }
+
+            // Use SubscriptionChecker to get limits and features
+            $subscriptionChecker = new \App\Libraries\SubscriptionChecker();
+
+            // Parse package modules
+            $packageModules = json_decode($package['package_modules'], true) ?? [];
+
+            // Extract limits and features
+            $maxLicenses = $subscriptionChecker->getLimit($this->userID, 'Product_Count_Limit', 'value') ?? 0;
+            $maxStorage = $subscriptionChecker->getLimit($this->userID, 'File_Storage', 'value') ?? 0;
+            $maxApiCalls = 10000; // Default, can be made configurable
+
+            // Extract features from package modules
+            $features = [
+                'license_management' => isset($packageModules['license_management']),
+                'api_access' => true, // Always available if they can access API
+                'email_support' => true, // Can be made configurable
+                'phone_support' => false, // Premium feature
+                'custom_branding' => false // Premium feature
+            ];
+
+            // Add specific feature checks
+            if (isset($packageModules['license_management'])) {
+                $licenseFeatures = $packageModules['license_management'];
+                $features['license_prefix'] = isset($licenseFeatures['licenseprefix']) && $licenseFeatures['licenseprefix']['enabled'] === 'true';
+                $features['license_suffix'] = isset($licenseFeatures['licensesuffix']) && $licenseFeatures['licensesuffix']['enabled'] === 'true';
+            }
+
+            // Get current usage
+            $licenseCount = $this->LicensesModel->where('owner_id', $this->userID)->countAllResults();
+            $storageUsedMb = 0;
+            $storageUserDir = FCPATH . '../user-data/' . $this->userID;
+            if (is_dir($storageUserDir)) {
+                $storageUsedMb = $this->getDirectorySize($storageUserDir) / 1024 / 1024;
+            }
+
+            $limitsData = [
+                'package' => $package['package_name'],
+                'limits' => [
+                    'max_licenses' => $maxLicenses,
+                    'max_api_calls_per_month' => $maxApiCalls,
+                    'max_storage_mb' => $maxStorage,
+                    'features' => $features
+                ],
+                'current_usage' => [
+                    'licenses' => $licenseCount,
+                    'api_calls_this_month' => 0, // Can be enhanced with actual tracking
+                    'storage_used_mb' => round($storageUsedMb, 2)
+                ]
+            ];
+
+            return $this->respondCreated($limitsData);
+
+        } catch (\Exception $e) {
+            log_message('error', '[API] Subscription limits error: ' . $e->getMessage());
+            $response = [
+                'result' => 'error',
+                'message' => 'Failed to retrieve subscription limits',
+                'error_code' => 500
+            ];
+            return $this->respondCreated($response);
+        }
+    }
+
+    /**
+     * Helper method to calculate directory size
+     */
+    private function getDirectorySize($directory)
+    {
+        $size = 0;
+        if (is_dir($directory)) {
+            foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory)) as $file) {
+                if ($file->isFile()) {
+                    $size += $file->getSize();
+                }
+            }
+        }
+        return $size;
+    }
+
+    /**
      * Action: all
      * URI: /api/package/all/{secret_key}
      * Method: GET
@@ -3436,8 +3726,8 @@ class Api extends ResourceController
                     'recent_activities' => array_map(function($activity) {
                         return [
                             'license_key' => $activity['license_key'],
-                            'action' => $activity['action_type'],
-                            'details' => $activity['details'],
+                            'action' => $activity['action'],
+                            'source' => $activity['source'],
                             'timestamp' => $activity['time']
                         ];
                     }, $recentActivities)
@@ -3556,19 +3846,19 @@ class Api extends ResourceController
 
         try {
             // Get all user settings
-            $settings = $this->UserSettingsModel->where('user_id', $this->userID)->findAll();
+            $settings = $this->UserSettingsModel->where('owner_id', $this->userID)->findAll();
 
             // Format settings as key-value pairs, decrypting secret keys
             $formattedSettings = [];
             foreach ($settings as $setting) {
-                $value = $setting['setting_value'];
+                $value = $setting['value'];
 
                 // Decrypt secret keys but keep other settings as-is
-                if (strpos($setting['setting_name'], '_secret_key') !== false && is_encrypted_key($value)) {
+                if (strpos($setting['key'], '_secret_key') !== false && is_encrypted_key($value)) {
                     $value = decrypt_secret_key($value, $this->userID);
                 }
 
-                $formattedSettings[$setting['setting_name']] = $value;
+                $formattedSettings[$setting['key']] = $value;
             }
 
             return $this->respond([

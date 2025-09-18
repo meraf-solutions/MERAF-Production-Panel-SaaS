@@ -42,8 +42,11 @@ This is the MERAF Production Panel SaaS, a CodeIgniter 4-based multi-tenant web 
   - `Filters/` - Security filters (SecurityHeaders.php, APIThrottle.php, IPBlockFilter.php)
   - `Language/` - Internationalization files
 - `docs/` - **Comprehensive documentation**
-  - `SUBSCRIPTION_API.md` - Complete API documentation
-  - `DEVELOPMENT_WORKFLOW.md` - Development guidelines
+  - `api.md` - Complete API reference including subscription endpoints
+  - `architecture.md` - System architecture and multi-tenant design
+  - `technical.md` - Technical implementation details
+  - `SUBSCRIPTION_API.md` - Subscription business logic libraries
+  - `DEVELOPMENT_WORKFLOW.md` - Development workflow and team processes
 - `system/` - CodeIgniter 4 framework core (do not modify)
 - `writable/` - Application logs, cache, uploads
 - `user-data/` - Per-tenant data directories
@@ -162,6 +165,40 @@ Tests require database configuration in `app/Config/Database.php` under the 'tes
 - Automated billing and payment processing
 - Trial management and conversion tracking
 
+### Subscription Management API Endpoints
+The SaaS platform provides three REST API endpoints for comprehensive subscription management:
+
+#### `/subscription/status` - Subscription Status API
+- **Purpose**: Returns comprehensive subscription information including package details, payment status, and subscription timeline
+- **Authentication**: User-API-Key header authentication
+- **Response**: Complete subscription data with package modules, billing dates, and renewal status
+- **Usage**: Client applications checking subscription status and package information
+- **Implementation**: `Api.php:subscriptionStatus()` method
+
+#### `/subscription/usage` - Usage Analytics API
+- **Purpose**: Provides detailed usage analytics with daily breakdown for current billing period
+- **Authentication**: User-API-Key header authentication
+- **Response**: Current usage counts, daily breakdown, and usage trend analysis
+- **Features**: Daily usage tracking, trend analysis, projected monthly usage
+- **Usage**: Dashboard analytics, usage monitoring, billing period analysis
+- **Implementation**: `Api.php:subscriptionUsage()` method
+
+#### `/subscription/limits` - Feature Limits API
+- **Purpose**: Returns feature limits, current usage, and real-time availability status
+- **Authentication**: User-API-Key header authentication
+- **Response**: Feature-by-feature limit analysis with usage percentages and availability
+- **Features**: Real-time limit checking, usage alerts, upgrade recommendations
+- **Usage**: Feature gating, usage warnings, subscription upgrade prompts
+- **Implementation**: `Api.php:subscriptionLimits()` method
+
+#### API Development Guidelines
+- **ALWAYS require User-API-Key authentication** for all subscription endpoints
+- **USE SubscriptionModel and PackageModel** for data retrieval with proper tenant scoping
+- **IMPLEMENT proper error handling** for expired/invalid subscriptions
+- **RETURN consistent JSON structure** with `status` and `data` fields
+- **INCLUDE tenant validation** to ensure data isolation
+- **LOG API access** for usage analytics and security monitoring
+
 ### Multi-Tenant Authentication & Security
 - User authentication with CodeIgniter Shield
 - User-API-Key authentication (6-character alphanumeric)
@@ -256,6 +293,61 @@ Tests require database configuration in `app/Config/Database.php` under the 'tes
 - Database interactions should go through Models, not direct queries in Controllers
 - Use migrations for database schema changes
 - The application uses output compression for performance optimization
+
+### API Route Configuration
+
+#### Subscription API Routes (`app/Config/Routes.php`)
+The subscription management endpoints are configured in the main routes file:
+
+```php
+// Subscription Management API
+$routes->get("subscription/status", 'Api::subscriptionStatus');
+$routes->get("subscription/usage", 'Api::subscriptionUsage');
+$routes->get("subscription/limits", 'Api::subscriptionLimits');
+```
+
+#### API Endpoint Development Pattern
+When adding new API endpoints for subscription management:
+
+1. **Route Definition**: Add route in `app/Config/Routes.php` under the subscription group
+2. **Controller Method**: Implement in `Api.php` with proper authentication checks
+3. **Model Integration**: Use `SubscriptionModel`, `PackageModel`, and related models
+4. **Authentication**: Require `User-API-Key` header authentication
+5. **Error Handling**: Return consistent JSON responses with proper HTTP status codes
+6. **Logging**: Log API access for analytics and security monitoring
+
+#### API Response Standards
+All subscription API endpoints should follow this response pattern:
+
+```php
+// Success response
+return $this->respond([
+    'status' => 'success',
+    'data' => $responseData
+], 200);
+
+// Error response
+return $this->respond([
+    'status' => 'error',
+    'message' => 'Error description'
+], $httpStatusCode);
+```
+
+#### API Authentication Pattern
+All subscription endpoints must implement User-API-Key authentication:
+
+```php
+// Required authentication check in controller methods
+if (!$this->authenticate()) {
+    return $this->respond(['status' => 'error', 'message' => 'Invalid User-API-Key'], 401);
+}
+
+// Tenant data isolation with owner_id scoping
+$subscription = $this->SubscriptionModel->getActiveByUserId($this->userID);
+if (!$subscription) {
+    return $this->respond(['status' => 'error', 'message' => 'No active subscription found'], 404);
+}
+```
 
 ### Enhanced Development Guidelines
 
@@ -556,9 +648,12 @@ class SubscriptionSystemTest extends CodeIgniter\Test\CIUnitTestCase
 
 ## Documentation References
 
-### Comprehensive API Documentation
-- **`docs/SUBSCRIPTION_API.md`**: Complete API reference for all libraries
-- **`docs/DEVELOPMENT_WORKFLOW.md`**: Development guidelines and best practices
+### Comprehensive Documentation
+- **`docs/api.md`**: Complete API reference including subscription endpoints
+- **`docs/architecture.md`**: System architecture and multi-tenant design
+- **`docs/technical.md`**: Technical implementation details
+- **`docs/SUBSCRIPTION_API.md`**: Subscription business logic libraries
+- **`docs/DEVELOPMENT_WORKFLOW.md`**: Development workflow and team processes
 - **Inline code documentation**: PHPDoc standards for all methods
 
 ### Code Examples & Integration

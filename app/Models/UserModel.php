@@ -306,7 +306,7 @@ class UserModel extends ShieldUserModel
             // Check if the API key is encrypted and decrypt it
             if (is_encrypted_key($user->api_key)) {
                 $decryptedApiKey = decrypt_secret_key($user->api_key, $userID);
-                log_message('debug', "Decrypted user API key for user {$userID}");
+                // log_message('debug', "Decrypted user API key for user {$userID}");
                 return $decryptedApiKey;
             } else {
                 // Backward compatibility for unencrypted keys
