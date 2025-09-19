@@ -1872,6 +1872,11 @@
                         completeFileList = JSON.stringify(response.current_files);
                         listFilesAvailable();
 
+                        // Update current changelog files for star icon display
+                        if (response.current_changelog_files) {
+                            currentChangelogFiles = response.current_changelog_files;
+                        }
+
                         if (response.changelog_updated) {
                             showToast('info', '<?= lang('Pages.Changelog_urls_updated') ?>');
                         }
