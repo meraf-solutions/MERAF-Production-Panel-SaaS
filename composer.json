@@ -16,18 +16,18 @@
         "codeigniter4/settings": "^2.2",
         "codeigniter4/shield": "^1.0",
         "codeigniter4/tasks": "dev-develop",        
-        "laminas/laminas-escaper": "^2.13",
+        "laminas/laminas-escaper": "^2.17",
         "psr/log": "^3.0"
     },
     "require-dev": {
         "codeigniter/coding-standard": "^1.7",
-        "fakerphp/faker": "^1.9",
+        "fakerphp/faker": "^1.24",
         "friendsofphp/php-cs-fixer": "^3.47.1",
-        "kint-php/kint": "^5.0.4",
-        "mikey179/vfsstream": "^1.6",
+        "kint-php/kint": "^6.0",
+        "mikey179/vfsstream": "^1.6.12",
         "nexusphp/cs-config": "^3.6",
         "phpunit/phpunit": "^10.5.16 || ^11.2",
-        "predis/predis": "^1.1 || ^2.0"
+        "predis/predis": "^3.0"
     },
     "suggest": {
         "ext-curl": "If you use CURLRequest class",
