@@ -131,6 +131,7 @@ node_modules
 #-------------------------
 .claude/
 commit_message.txt
+composer.lock
 user-data/
 writable/Build-Release/
 writable/uploads/app-custom-assets
