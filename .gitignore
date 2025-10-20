@@ -140,4 +140,5 @@ app/Config/Database.php
 app/Config/Email.php
 app/Config/Encryption.php
 public/service-worker.js
-docs/single-user-prodpanel
+docs/Single-User-Version
+docs/wp-plugins/WooCommerce-Addon-Plugin_symlinked
