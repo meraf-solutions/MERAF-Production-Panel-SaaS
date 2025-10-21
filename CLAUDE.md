@@ -375,6 +375,36 @@ $routes->get("license/data-by-key/(:any)/(:any)", 'Api::retrieveLicenseByKey/$1/
 - Use migrations for database schema changes
 - The application uses output compression for performance optimization
 
+### Documentation Policy
+
+**IMPORTANT**: When adding new features or fixes, ALWAYS update existing documentation instead of creating new markdown files.
+
+**Documentation Structure**:
+- **`docs/api.md`** - API endpoints, authentication, request/response formats, usage examples
+- **`docs/subscription_api.md`** - Saas-Subscription API endpoints, authentication, request/response formats, usage examples
+- **`docs/technical.md`** - Implementation details, code patterns, helper functions, algorithms
+- **`docs/architecture.md`** - System design, component interactions, data flows, integration patterns
+- **`CLAUDE.md`** - Project overview, development guidelines, critical system behaviors (this file)
+
+**Rules**:
+1. **NEVER create new markdown documentation files** without checking existing docs/ directory first
+2. **ALWAYS update existing documentation files** when adding new features or fixes
+3. **ONLY create a new .md file if**:
+   - No existing category fits the content
+   - The content is substantial enough to warrant a separate file (>500 lines)
+   - You've verified with the user first
+4. **When making changes**:
+   - Update the "Last Updated" date in documentation
+   - Keep documentation concise and avoid redundancy across files
+   - Use cross-references instead of duplicating content
+
+**Examples**:
+- ✅ Add subscription system details → Update `docs/technical.md` section 13
+- ✅ Add new API endpoint → Update `docs/api.md` with endpoint documentation
+- ✅ Add system architecture diagram → Update `docs/architecture.md`
+- ❌ Create `SUBSCRIPTION-IMPLEMENTATION-SUMMARY.md` → Should update existing docs instead
+- ❌ Create `API_FIX_RENEWAL_FLOW.md` → Should update `docs/api.md` instead
+
 ### API Route Configuration
 
 #### Subscription API Routes (`app/Config/Routes.php`)
