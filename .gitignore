@@ -139,6 +139,7 @@ app/Config/App.php
 app/Config/Database.php
 app/Config/Email.php
 app/Config/Encryption.php
+public/manifest.json
 public/service-worker.js
 docs/Single-User-Version
 docs/wp-plugins/WooCommerce-Addon-Plugin_symlinked
