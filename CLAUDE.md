@@ -45,7 +45,7 @@ This is the MERAF Production Panel SaaS, a CodeIgniter 4-based multi-tenant web 
   - `api.md` - Complete API reference including subscription endpoints
   - `architecture.md` - System architecture and multi-tenant design
   - `technical.md` - Technical implementation details
-  - `SUBSCRIPTION_API.md` - Subscription business logic libraries
+  - `subscription_api.md` - Subscription business logic libraries
   - `DEVELOPMENT_WORKFLOW.md` - Development workflow and team processes
 - `system/` - CodeIgniter 4 framework core (do not modify)
 - `writable/` - Application logs, cache, uploads
@@ -733,7 +733,7 @@ class SubscriptionSystemTest extends CodeIgniter\Test\CIUnitTestCase
 - **`docs/api.md`**: Complete API reference including subscription endpoints
 - **`docs/architecture.md`**: System architecture and multi-tenant design
 - **`docs/technical.md`**: Technical implementation details
-- **`docs/SUBSCRIPTION_API.md`**: Subscription business logic libraries
+- **`docs/subscription_api.md`**: Subscription business logic libraries
 - **`docs/DEVELOPMENT_WORKFLOW.md`**: Development workflow and team processes
 - **Inline code documentation**: PHPDoc standards for all methods
 

@@ -217,7 +217,7 @@ The SaaS system uses dual authentication layers:
 ├── public/
 │   └── install/            # Secure installation system
 ├── docs/                   # Comprehensive SaaS documentation
-│   ├── SUBSCRIPTION_API.md # Complete API documentation
+│   ├── subscription_api.md # Complete API documentation
 │   └── DEVELOPMENT_WORKFLOW.md # Development guidelines
 └── tests/                  # PHPUnit test files
 ```
@@ -479,7 +479,7 @@ Comprehensive SaaS documentation is available:
 - **[docs/api.md](docs/api.md)** - Complete API reference including subscription endpoints
 - **[docs/architecture.md](docs/architecture.md)** - System architecture and multi-tenant design
 - **[docs/technical.md](docs/technical.md)** - Technical implementation details
-- **[docs/SUBSCRIPTION_API.md](docs/SUBSCRIPTION_API.md)** - Subscription business logic libraries
+- **[docs/subscription_api.md](docs/subscription_api.md)** - Subscription business logic libraries
 - **[docs/DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md)** - Development workflow and team processes
 
 ## Support

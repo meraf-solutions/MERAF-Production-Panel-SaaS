@@ -7,7 +7,7 @@ This document outlines the essential development workflow for the MERAF Producti
 - **Technical Implementation**: [technical.md](technical.md) - Code implementation details
 - **Development Guidelines**: [../CLAUDE.md](../CLAUDE.md) - Coding patterns and best practices
 - **API Documentation**: [api.md](api.md) - Complete API reference
-- **Subscription Libraries**: [SUBSCRIPTION_API.md](SUBSCRIPTION_API.md) - Business logic libraries
+- **Subscription Libraries**: [subscription_api.md](subscription_api.md) - Business logic libraries
 
 ## Table of Contents
 
@@ -245,7 +245,7 @@ git push origin feature/subscription-api-endpoints
 
 **Always update documentation when:**
 - Adding new API endpoints → Update `docs/api.md`
-- Adding new libraries → Update `docs/SUBSCRIPTION_API.md`
+- Adding new libraries → Update `docs/subscription_api.md`
 - Changing architecture → Update `docs/architecture.md`
 - Modifying development patterns → Update `CLAUDE.md`
 
