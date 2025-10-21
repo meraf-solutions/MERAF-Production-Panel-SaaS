@@ -2,7 +2,7 @@
 /*
 Plugin Name: MERAF Production Panel - Saas Version
 Description: This plugin extends the functionality of MERAF Production Panel - Saas Version by integrating it with WooCommerce. Digital products can be purchased using WooCommerce and successful purchases will automatically create a license and send an email notification to the buyer.
-Version: 1.3.0
+Version: 1.3.1
 Author: MERAF Digital Solutions
 */
 
@@ -776,9 +776,14 @@ function update_stored_license_details($query_order_id, $query_item_id, $license
         // Get transaction ID or fallback to order ID
         $txnID = $order->get_transaction_id() ? $order->get_transaction_id() : $order->get_id();
 
-        // Get product details
-        $product = $item->get_product();
-        $productName = $product ? $product->get_name() : '';
+        // Get product details - use query_product_name_for_license_creation() to get FULL product reference
+        // This ensures we get "Sessner Premium" or "Sessner Enterprise", not just "Sessner"
+        $productName = query_product_name_for_license_creation($item);
+
+        if (!$productName) {
+            error_log('[MERAF] update_stored_license_details: ERROR - Could not determine product name for item ID ' . $query_item_id);
+            return false;
+        }
 
         error_log('[MERAF] update_stored_license_details: Transaction ID: ' . $txnID . ', Product: ' . $productName);
 
@@ -789,33 +794,53 @@ function update_stored_license_details($query_order_id, $query_item_id, $license
 
         error_log('[MERAF] ========== ATTEMPTING LICENSE RETRIEVAL ==========');
 
-        // ATTEMPT 1: Use the improved /api/license/data endpoint (searches by BOTH purchase_id_ OR txn_id)
+        // ATTEMPT 1: Use the improved /api/license/data endpoint with RETRY LOGIC
+        // Race condition fix: The Production Panel may still be processing the license asynchronously
+        // (email sending, FCM notifications, database commits), so we retry with exponential backoff
         $api_url = $prodPanelURL . 'api/license/data/' . $generalSecretKey . '/' . $txnID . '/' . urlencode($productName);
-        error_log('[MERAF] update_stored_license_details: ATTEMPT 1 - Calling API: ' . $api_url);
-
-        $response = wp_remote_get($api_url, [
-            'timeout' => 30,
-            'headers' => [
-                'User-API-Key' => $prodPanelUserAPIKey
-            ]
-        ]);
+        $max_retries = 3;
+        $retry_delay = 500000; // Start with 500ms (microseconds)
         $data = null;
 
-        if (!is_wp_error($response)) {
-            $body = wp_remote_retrieve_body($response);
-            $response_code = wp_remote_retrieve_response_code($response);
-            error_log('[MERAF] update_stored_license_details: ATTEMPT 1 Response Code: ' . $response_code);
-
-            $data = json_decode($body, true);
-
-            if (!isset($data['error']) && isset($data['license_key'])) {
-                error_log('[MERAF] update_stored_license_details: ATTEMPT 1 SUCCESS - License found: ' . $data['license_key']);
-            } else {
-                error_log('[MERAF] update_stored_license_details: ATTEMPT 1 FAILED - No valid license data');
-                $data = null; // Clear for next attempt
+        for ($attempt = 1; $attempt <= $max_retries; $attempt++) {
+            if ($attempt > 1) {
+                // Wait before retry (exponential backoff: 500ms, 1s, 2s)
+                error_log('[MERAF] update_stored_license_details: Waiting ' . ($retry_delay / 1000) . 'ms before retry...');
+                usleep($retry_delay);
+                $retry_delay *= 2; // Double the delay for next retry
             }
-        } else {
-            error_log('[MERAF] update_stored_license_details: ATTEMPT 1 ERROR - ' . $response->get_error_message());
+
+            error_log('[MERAF] update_stored_license_details: ATTEMPT 1.' . $attempt . ' - Calling API: ' . $api_url);
+
+            $response = wp_remote_get($api_url, [
+                'timeout' => 30,
+                'headers' => [
+                    'User-API-Key' => $prodPanelUserAPIKey
+                ]
+            ]);
+
+            if (!is_wp_error($response)) {
+                $body = wp_remote_retrieve_body($response);
+                $response_code = wp_remote_retrieve_response_code($response);
+                error_log('[MERAF] update_stored_license_details: ATTEMPT 1.' . $attempt . ' Response Code: ' . $response_code);
+
+                $data = json_decode($body, true);
+
+                if (!isset($data['error']) && isset($data['license_key'])) {
+                    error_log('[MERAF] update_stored_license_details: ATTEMPT 1.' . $attempt . ' SUCCESS - License found: ' . $data['license_key']);
+                    break; // Success! Exit retry loop
+                } else {
+                    $error_msg = isset($data['message']) ? $data['message'] : 'No valid license data';
+                    error_log('[MERAF] update_stored_license_details: ATTEMPT 1.' . $attempt . ' FAILED - ' . $error_msg);
+                    $data = null; // Clear for next retry
+                }
+            } else {
+                error_log('[MERAF] update_stored_license_details: ATTEMPT 1.' . $attempt . ' ERROR - ' . $response->get_error_message());
+            }
+        }
+
+        if (!$data && $max_retries > 1) {
+            error_log('[MERAF] update_stored_license_details: All ' . $max_retries . ' retry attempts failed');
         }
 
         // ATTEMPT 2: If first attempt failed, try with parent order ID if this is a subscription renewal

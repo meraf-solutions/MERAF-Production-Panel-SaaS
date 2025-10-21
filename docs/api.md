@@ -625,6 +625,41 @@ STEP 3: License Key Lookup (ultimate fallback)
   → Always works if key is stored
 ```
 
+#### Best Practices for Multi-Product Orders ✅ **CRITICAL**
+
+When retrieving licenses for orders containing multiple product variations (e.g., "Product Premium" and "Product Enterprise"), **ALWAYS use the FULL product reference** that includes the package type/variation:
+
+**✅ CORRECT - Full Product Reference:**
+```
+/api/license/data/{secret}/9AK123.../Sessner%20Premium
+/api/license/data/{secret}/9AK123.../Sessner%20Enterprise
+```
+
+**❌ WRONG - Base Product Name Only:**
+```
+/api/license/data/{secret}/9AK123.../Sessner  ← Returns first match only!
+/api/license/data/{secret}/9AK123.../Sessner  ← Returns same license!
+```
+
+**Why This Matters:**
+- The API uses `LIKE` query on `product_ref` field
+- "Sessner" matches BOTH "Sessner Premium" AND "Sessner Enterprise"
+- `->first()` returns the first match (always Premium if it was created first)
+- This causes duplicate licenses to be displayed for different products
+
+**WooCommerce Plugin Implementation:**
+The WooCommerce addon plugin (SaaS version, fixed in 2025-10-21) now uses `query_product_name_for_license_creation()` which:
+1. Extracts variation attributes (package-type, version, etc.)
+2. Constructs full product reference ("Sessner Premium", "Sessner Enterprise")
+3. Ensures each product variation gets its correct license key
+
+**Multi-Tenant Considerations:**
+- Each tenant's licenses are isolated by user_id
+- Full product references ensure correct license matching within each tenant's data
+- Tenant isolation prevents cross-contamination even with similar product names
+
+**Reference:** See [MULTI_PRODUCT_FIX_TESTING.md](../../../MULTI_PRODUCT_FIX_TESTING.md) for detailed testing procedures (applies to both standard and SaaS versions).
+
 #### Get License Activity Logs
 **Endpoint**: `GET /api/license/logs/{license_key}/{secret_key}`  
 **Purpose**: Retrieve activity logs for a specific license  
