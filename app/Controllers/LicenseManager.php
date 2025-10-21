@@ -163,59 +163,97 @@ class LicenseManager extends BaseController
 			// reformat the date_expiry if present
 			if($postedData['license_type'] !== 'lifetime') {
 				if ( ($postedData['date_expiry'] !== null) && ($postedData['date_expiry'] !== '') ) {
-					// User's timezone from configuration
+					// TIMEZONE HANDLING LOGIC
+					// Check if this is an API call from WooCommerce or similar integration
+					// WooCommerce plugin sets item_reference = 'woocommerce' and sends dates in UTC
+					$isWooCommerceCall = isset($postedData['item_reference']) &&
+					                   $postedData['item_reference'] === 'woocommerce';
 
-					// First check session for detected timezone
-					$session = session();
-					$userTimezone = $session->get('detected_timezone') ?? 
-									$this->myConfig['defaultTimezone'] ?? 
-									'UTC';
-					
-					// App's default timezone
+					// App's default timezone (UTC)
 					$appTimezone = app_timezone();
-	
-					// Parse the date with the user's timezone
-					$dateCreated = getLicenseData($postedData['license_key'], 'date_created');
-					$dateCreated = Time::parse($dateCreated, $appTimezone);
-	
+
 					// Remove AM/PM and convert to 24-hour format
 					$dateExpiry = $postedData['date_expiry'];
 					$is_pm = stripos($dateExpiry, 'PM') !== false;
 					$dateExpiry = trim(str_replace(['AM', 'PM'], '', $dateExpiry));
-	
-					// Parse the expiration date in the user's timezone
-					$expirationDate = Time::parse($dateExpiry, $userTimezone);
-	
-					// Convert to app's default timezone
-					$expirationDate = $expirationDate->setTimezone($appTimezone);
-	
-					// Convert to 24-hour format if needed
-					if ($is_pm) {
-						$hour = $expirationDate->getHour();
-						if ($hour !== 12) {
-							$expirationDate = $expirationDate->setTime($hour + 12, $expirationDate->getMinute(), $expirationDate->getSecond());
+
+					if ($isWooCommerceCall) {
+						// WooCommerce sends dates already in UTC format
+						// No timezone conversion needed - parse as UTC directly
+						log_message('info', '[TIMEZONE] WooCommerce API call detected (edit_license_action) - treating date_expiry as UTC');
+						log_message('info', '[TIMEZONE] Received date_expiry: ' . $dateExpiry);
+
+						$expirationDate = Time::parse($dateExpiry, 'UTC');
+
+						// Handle AM/PM for 24-hour conversion
+						if ($is_pm) {
+							$hour = $expirationDate->getHour();
+							if ($hour !== 12) {
+								$expirationDate = $expirationDate->setTime($hour + 12, $expirationDate->getMinute(), $expirationDate->getSecond());
+							}
+						} else {
+							$hour = $expirationDate->getHour();
+							if ($hour === 12) {
+								$expirationDate = $expirationDate->setTime(0, $expirationDate->getMinute(), $expirationDate->getSecond());
+							}
 						}
-					} else {
-						// Handle midnight (12 AM)
-						$hour = $expirationDate->getHour();
-						if ($hour === 12) {
-							$expirationDate = $expirationDate->setTime(0, $expirationDate->getMinute(), $expirationDate->getSecond());
-						}
-					}
-	
-					// Check if the time is '00:00:00'
-					if ($expirationDate->getHour() === 0 && $expirationDate->getMinute() === 0) {
-						// Set the time to the same as the creation date
-						$postedData['date_expiry'] = $expirationDate
-							->setTime(
-								$dateCreated->getHour(), 
-								$dateCreated->getMinute(), 
-								$dateCreated->getSecond()
-							)
-							->format('Y-m-d H:i:s');
-					} else {
-						// Convert to standard database format
+
 						$postedData['date_expiry'] = $expirationDate->format('Y-m-d H:i:s');
+						log_message('info', '[TIMEZONE] Final date_expiry for database: ' . $postedData['date_expiry']);
+					} else {
+						// Manual web UI - convert from user timezone to UTC
+						log_message('info', '[TIMEZONE] Manual web UI call detected (edit_license_action) - converting from user timezone');
+
+						// First check session for detected timezone
+						$session = session();
+						$userTimezone = $session->get('detected_timezone') ??
+						                $this->myConfig['defaultTimezone'] ??
+						                'UTC';
+
+						log_message('info', '[TIMEZONE] User timezone: ' . $userTimezone);
+						log_message('info', '[TIMEZONE] Received date_expiry: ' . $dateExpiry);
+
+						// Parse the date with the user's timezone
+						$dateCreated = getLicenseData($postedData['license_key'], 'date_created');
+						$dateCreated = Time::parse($dateCreated, $appTimezone);
+
+						// Parse the expiration date in the user's timezone
+						$expirationDate = Time::parse($dateExpiry, $userTimezone);
+
+						// Convert to app's default timezone
+						$expirationDate = $expirationDate->setTimezone($appTimezone);
+
+						// Convert to 24-hour format if needed
+						if ($is_pm) {
+							$hour = $expirationDate->getHour();
+							if ($hour !== 12) {
+								$expirationDate = $expirationDate->setTime($hour + 12, $expirationDate->getMinute(), $expirationDate->getSecond());
+							}
+						} else {
+							// Handle midnight (12 AM)
+							$hour = $expirationDate->getHour();
+							if ($hour === 12) {
+								$expirationDate = $expirationDate->setTime(0, $expirationDate->getMinute(), $expirationDate->getSecond());
+							}
+						}
+
+						// Check if the time is '00:00:00'
+						if ($expirationDate->getHour() === 0 && $expirationDate->getMinute() === 0) {
+							// Set the time to the same as the creation date
+							$postedData['date_expiry'] = $expirationDate
+								->setTime(
+									$dateCreated->getHour(),
+									$dateCreated->getMinute(),
+									$dateCreated->getSecond()
+								)
+								->format('Y-m-d H:i:s');
+						} else {
+							// Convert to standard database format
+							$postedData['date_expiry'] = $expirationDate->format('Y-m-d H:i:s');
+						}
+
+						log_message('info', '[TIMEZONE] Converted to UTC: ' . $postedData['date_expiry']);
+						log_message('info', '[TIMEZONE] Final date_expiry for database: ' . $postedData['date_expiry']);
 					}
 				}
 				else {
@@ -790,58 +828,96 @@ class LicenseManager extends BaseController
 				else {
 					// reformat the date_expiry if present
 					if ( ($licenseData['date_expiry'] !== null) && ($licenseData['date_expiry'] !== '') ) {
-						// User's timezone from configuration
-						
-						// First check session for detected timezone
-						$session = session();
-						$userTimezone = $session->get('detected_timezone') ?? 
-										$this->myConfig['defaultTimezone'] ?? 
-										'UTC';
-						
-						// App's default timezone
-						$appTimezone = app_timezone();
+						// TIMEZONE HANDLING LOGIC
+						// Check if this is an API call from WooCommerce or similar integration
+						// WooCommerce plugin sets item_reference = 'woocommerce' and sends dates in UTC
+						$isWooCommerceCall = isset($licenseData['item_reference']) &&
+						                   $licenseData['item_reference'] === 'woocommerce';
 
-						// Parse the date with the user's timezone
-						$dateCreated = Time::now()->setTimezone('UTC')->format('Y-m-d H:i:s');
+						// App's default timezone (UTC)
+						$appTimezone = app_timezone();
 
 						// Remove AM/PM and convert to 24-hour format
 						$dateExpiry = $licenseData['date_expiry'];
 						$is_pm = stripos($dateExpiry, 'PM') !== false;
 						$dateExpiry = trim(str_replace(['AM', 'PM'], '', $dateExpiry));
 
-						// Parse the expiration date in the user's timezone
-						$expirationDate = Time::parse($dateExpiry, $userTimezone);
+						if ($isWooCommerceCall) {
+							// WooCommerce sends dates already in UTC format
+							// No timezone conversion needed - parse as UTC directly
+							log_message('info', '[TIMEZONE] WooCommerce API call detected (createLicense) - treating date_expiry as UTC');
+							log_message('info', '[TIMEZONE] Received date_expiry: ' . $dateExpiry);
 
-						// Convert to app's default timezone
-						$expirationDate = $expirationDate->setTimezone($appTimezone);
+							$expirationDate = Time::parse($dateExpiry, 'UTC');
 
-						// Convert to 24-hour format if needed
-						if ($is_pm) {
-							$hour = $expirationDate->getHour();
-							if ($hour !== 12) {
-								$expirationDate = $expirationDate->setTime($hour + 12, $expirationDate->getMinute(), $expirationDate->getSecond());
+							// Handle AM/PM for 24-hour conversion
+							if ($is_pm) {
+								$hour = $expirationDate->getHour();
+								if ($hour !== 12) {
+									$expirationDate = $expirationDate->setTime($hour + 12, $expirationDate->getMinute(), $expirationDate->getSecond());
+								}
+							} else {
+								$hour = $expirationDate->getHour();
+								if ($hour === 12) {
+									$expirationDate = $expirationDate->setTime(0, $expirationDate->getMinute(), $expirationDate->getSecond());
+								}
 							}
-						} else {
-							// Handle midnight (12 AM)
-							$hour = $expirationDate->getHour();
-							if ($hour === 12) {
-								$expirationDate = $expirationDate->setTime(0, $expirationDate->getMinute(), $expirationDate->getSecond());
-							}
-						}
 
-						// Check if the time is '00:00:00'
-						if ($expirationDate->getHour() === 0 && $expirationDate->getMinute() === 0) {
-							// Set the time to the same as the creation date
-							$licenseData['date_expiry'] = $expirationDate
-								->setTime(
-									$dateCreated->getHour(), 
-									$dateCreated->getMinute(), 
-									$dateCreated->getSecond()
-								)
-								->format('Y-m-d H:i:s');
-						} else {
-							// Convert to standard database format
 							$licenseData['date_expiry'] = $expirationDate->format('Y-m-d H:i:s');
+							log_message('info', '[TIMEZONE] Final date_expiry for database: ' . $licenseData['date_expiry']);
+						} else {
+							// Manual web UI or other sources - convert from user timezone to UTC
+							log_message('info', '[TIMEZONE] Non-WooCommerce call (createLicense) - converting from user timezone');
+
+							// First check session for detected timezone
+							$session = session();
+							$userTimezone = $session->get('detected_timezone') ??
+							                $this->myConfig['defaultTimezone'] ??
+							                'UTC';
+
+							log_message('info', '[TIMEZONE] User timezone: ' . $userTimezone);
+							log_message('info', '[TIMEZONE] Received date_expiry: ' . $dateExpiry);
+
+							// Get creation date (as Time object, not string!)
+							$dateCreated = Time::now()->setTimezone('UTC');
+
+							// Parse the expiration date in the user's timezone
+							$expirationDate = Time::parse($dateExpiry, $userTimezone);
+
+							// Convert to app's default timezone (UTC)
+							$expirationDate = $expirationDate->setTimezone($appTimezone);
+
+							// Convert to 24-hour format if needed
+							if ($is_pm) {
+								$hour = $expirationDate->getHour();
+								if ($hour !== 12) {
+									$expirationDate = $expirationDate->setTime($hour + 12, $expirationDate->getMinute(), $expirationDate->getSecond());
+								}
+							} else {
+								// Handle midnight (12 AM)
+								$hour = $expirationDate->getHour();
+								if ($hour === 12) {
+									$expirationDate = $expirationDate->setTime(0, $expirationDate->getMinute(), $expirationDate->getSecond());
+								}
+							}
+
+							// Check if the time is '00:00:00'
+							if ($expirationDate->getHour() === 0 && $expirationDate->getMinute() === 0) {
+								// Set the time to the same as the creation date
+								$licenseData['date_expiry'] = $expirationDate
+									->setTime(
+										$dateCreated->getHour(),
+										$dateCreated->getMinute(),
+										$dateCreated->getSecond()
+									)
+									->format('Y-m-d H:i:s');
+							} else {
+								// Convert to standard database format
+								$licenseData['date_expiry'] = $expirationDate->format('Y-m-d H:i:s');
+							}
+
+							log_message('info', '[TIMEZONE] Converted to UTC: ' . $licenseData['date_expiry']);
+							log_message('info', '[TIMEZONE] Final date_expiry for database: ' . $licenseData['date_expiry']);
 						}
 					}
 					else {

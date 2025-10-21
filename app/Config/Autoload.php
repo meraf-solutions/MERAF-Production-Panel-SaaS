@@ -99,6 +99,7 @@ class Autoload extends AutoloadConfig
         'locale',
         'product',
         'license',
+        'subscription',
         'emailsubscription',
         'emailtemplate',
         'notification',

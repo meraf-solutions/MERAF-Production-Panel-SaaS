@@ -249,6 +249,48 @@ POST /api/user/settings                   → Tenant settings update
 6. HTML Response with dynamic content
 ```
 
+### Timezone-Aware License Creation Flow ✅
+```
+1. API Request (POST /api/license/create)
+   ↓
+2. Secret Key/User-API-Key Authentication
+   ↓
+3. Source Detection (item_reference parameter)
+   ↓
+4a. WooCommerce Call → Parse date as UTC (no conversion)
+   OR
+4b. Manual Web UI → Convert from user timezone to UTC
+   ↓
+5. Comprehensive Timezone Logging ([TIMEZONE] markers)
+   ↓
+6. Database Storage (all dates in UTC)
+   ↓
+7. JSON Response with created license
+```
+
+### Bulletproof License Retrieval Flow ✅
+```
+1. API Request (GET /api/license/data/{secret}/{id}/{product})
+   ↓
+2. Secret Key Authentication
+   ↓
+3. Enhanced Database Query (purchase_id_ OR txn_id)
+   ↓
+4a. License Found → Return license data
+   OR
+4b. Not Found → Try fallback endpoint
+   ↓
+5. Fallback: Try data-by-txn endpoint
+   ↓
+6a. License Found → Return license data
+   OR
+6b. Not Found → Try ultimate fallback
+   ↓
+7. Ultimate Fallback: data-by-key endpoint
+   ↓
+8. Return license data or 404 error
+```
+
 ## Configuration Architecture
 
 ### Multi-Environment Configuration

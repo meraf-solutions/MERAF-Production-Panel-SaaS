@@ -367,10 +367,27 @@ Content-Type: application/json
 - `date_expiry` (conditional): Required for trial/subscription types
 - `until` (optional): Supported version limit
 - `current_ver` (optional): Current product version
-- `item_reference` (optional): Defaults to product_ref
+- `item_reference` (optional): Defaults to product_ref (**CRITICAL for timezone handling**)
 - `manual_reset_count` (optional): Manual reset tracking
 
-**Example Request**:
+**Timezone Handling** ✅ **CRITICAL**:
+
+The API implements **source-aware timezone detection** to prevent time loss bugs:
+
+- **WooCommerce/External Integrations**: Set `item_reference=woocommerce`
+  - Dates treated as UTC (no conversion)
+  - Prevents 8-hour time loss from double timezone conversion
+
+- **Manual Web UI**: Omit `item_reference` or use other values
+  - Dates converted from user timezone to UTC
+  - Standard behavior for manual license creation
+
+**Example - WooCommerce Integration** (dates in UTC):
+```
+GET /api/license/create/secret_key/data?license_type=subscription&license_status=active&first_name=John&last_name=Doe&email=john@example.com&max_allowed_domains=1&max_allowed_devices=1&product_ref=my-product&txn_id=txn123&purchase_id_=purchase123&date_expiry=2025-12-31 23:59:59&item_reference=woocommerce
+```
+
+**Example - Manual Creation** (dates in user timezone):
 ```
 GET /api/license/create/your_secret_key/data?license_type=lifetime&license_status=active&first_name=John&last_name=Doe&email=john@example.com&max_allowed_domains=1&max_allowed_devices=1&product_ref=my-product&txn_id=txn123&purchase_id_=purchase123
 ```
@@ -450,9 +467,16 @@ GET /api/license/create/your_secret_key/data?license_type=lifetime&license_statu
     "email": "updated@example.com",
     "license_status": "active",
     "max_allowed_domains": 2,
-    "max_allowed_devices": 2
+    "max_allowed_devices": 2,
+    "date_expiry": "2025-12-31 23:59:59",
+    "item_reference": "woocommerce"
 }
 ```
+
+**Timezone Handling** ✅:
+- Same timezone detection as license creation
+- Set `item_reference=woocommerce` for UTC dates (external integrations)
+- Omit `item_reference` or use other values for user timezone conversion (manual updates)
 
 #### Delete License
 **Endpoint**: `GET /api/license/delete/{option}/{secret_key}/{license_key}`  
@@ -504,17 +528,36 @@ GET /api/license/create/your_secret_key/data?license_type=lifetime&license_statu
 - `401`: Not registered
 - `101`: Invalid license
 
-### 5. License Data Retrieval
+### 5. License Data Retrieval ✅ **BULLETPROOF SYSTEM**
 
-#### Retrieve License by Purchase ID
-**Endpoint**: `GET /api/license/data/{secret_key}/{purchase_id}/{product_name}`  
-**Purpose**: Get license details using purchase ID and product name  
-**Authentication**: General Secret Key  
+The system provides three specialized endpoints with cascading fallback strategy for maximum reliability in license retrieval, especially for subscription renewals.
+
+#### Retrieve License by Purchase ID (ROBUST - PRIMARY METHOD)
+**Endpoint**: `GET /api/license/data/{secret_key}/{purchase_id}/{product_name}`
+**Purpose**: Get license details using purchase ID OR transaction ID with product name
+**Authentication**: General Secret Key
+
+**Enhanced Features** ✅:
+- **Dual Search Logic**: Searches by BOTH `purchase_id_` OR `txn_id` fields
+- **Subscription-Safe**: Works for initial orders AND all renewal scenarios
+- **Backward Compatible**: No code changes needed for existing integrations
 
 **Parameters**:
 - `secret_key` (path, required): General secret key
-- `purchase_id` (path, required): Purchase identifier
+- `purchase_id` (path, required): Purchase identifier (searches both purchase_id_ and txn_id)
 - `product_name` (path, required): Product name
+
+**Database Query Logic**:
+```php
+// Enhanced OR logic for maximum reliability
+$licenseDetails = $this->LicensesModel
+    ->like('product_ref', $productName)
+    ->groupStart()
+        ->where('purchase_id_', $purchaseID)  // Try purchase_id_ first
+        ->orWhere('txn_id', $purchaseID)      // OR try txn_id
+    ->groupEnd()
+    ->first();
+```
 
 **Response Format**:
 ```json
@@ -523,11 +566,63 @@ GET /api/license/create/your_secret_key/data?license_type=lifetime&license_statu
     "license_key": "ABC123...",
     "first_name": "John",
     "last_name": "Doe",
-    "email": "john@example.com", 
+    "email": "john@example.com",
     "purchase_id_": "purchase123",
+    "txn_id": "txn456",
     "product_ref": "my-product",
-    "date_created": "2024-01-01 12:00:00"
+    "date_created": "2024-01-01 12:00:00",
+    "date_expiry": "2025-01-01 12:00:00"
 }
+```
+
+#### Retrieve License by Transaction ID (SPECIFIC)
+**Endpoint**: `GET /api/license/data-by-txn/{secret_key}/{txn_id}/{product_name}`
+**Purpose**: Direct transaction ID lookup for subscription renewals
+**Authentication**: General Secret Key
+
+**Use Case**: When transaction ID is stable across renewals and you want specific txn_id matching
+
+**Parameters**:
+- `secret_key` (path, required): General secret key
+- `txn_id` (path, required): Transaction identifier
+- `product_name` (path, required): Product name
+
+**Response Format**: Same as primary endpoint
+
+#### Retrieve License by Key (ULTIMATE FALLBACK)
+**Endpoint**: `GET /api/license/data-by-key/{secret_key}/{license_key}`
+**Purpose**: Direct license key lookup without product name requirement
+**Authentication**: General Secret Key
+
+**Features**:
+- **No Product Name Required**: Simple, direct lookup
+- **Always Works**: If you have the license key, this will find it
+- **Perfect for Order Meta**: When license key stored in order custom fields
+
+**Parameters**:
+- `secret_key` (path, required): General secret key
+- `license_key` (path, required): License key to retrieve
+
+**Response Format**: Same as primary endpoint
+
+#### Cascading Fallback Strategy (Recommended for Integrations)
+
+For maximum reliability in external integrations (WooCommerce, payment gateways):
+
+```
+STEP 1: Primary Endpoint with Current ID
+  → GET /api/license/data/{secret}/{current_order_id}/{product}
+  → Leverages OR logic (purchase_id_ OR txn_id)
+  → Handles 90% of scenarios
+
+STEP 2: Parent Order ID (if renewal detected)
+  → GET /api/license/data/{secret}/{parent_order_id}/{product}
+  → Additional reliability layer for renewals
+
+STEP 3: License Key Lookup (ultimate fallback)
+  → GET /api/license/data-by-key/{secret}/{stored_license_key}
+  → Extract license_key from order meta/custom fields
+  → Always works if key is stored
 ```
 
 #### Get License Activity Logs

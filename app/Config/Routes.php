@@ -262,6 +262,8 @@ $routes->group("api", function ($routes) {
     $routes->get("license/export/(:any)", 'Api::exportLicensesCsv/$1');
     $routes->post("license/verify/(:any)/(:any)", 'Api::checkLicense/$1/$2');
     $routes->get("license/data/(:any)/(:any)/(:any)", 'Api::retrieveLicense/$1/$2/$3');
+    $routes->get("license/data-by-txn/(:any)/(:any)/(:any)", 'Api::retrieveLicenseByTxn/$1/$2/$3');
+    $routes->get("license/data-by-key/(:any)/(:any)", 'Api::retrieveLicenseByKey/$1/$2');
     $routes->get("license/config/(:any)", 'Api::retrieveNewLicenseSettings/$1');
     $routes->get("license/create/(:any)/(:any)", 'Api::createLicense/$1/$2');
     $routes->post("license/edit/(:any)", 'Api::editLicense/$1');

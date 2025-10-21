@@ -218,6 +218,87 @@ The SaaS platform provides three REST API endpoints for comprehensive subscripti
 - Automated user directory setup with security protections
 - Default email template extraction on first login
 
+## Critical SaaS API Enhancements
+
+### Timezone-Aware License Processing ✅
+
+**Problem Solved**: External integrations (WooCommerce) were sending UTC dates, but the API incorrectly treated them as local timezone, causing 8-hour time loss on every renewal.
+
+**Solution**: Source-aware timezone detection in `Api.php`:
+
+```php
+// Detect WooCommerce API calls via item_reference parameter
+$isWooCommerceCall = isset($data['item_reference']) &&
+                     $data['item_reference'] === 'woocommerce';
+
+if ($isWooCommerceCall) {
+    // WooCommerce sends UTC - parse as UTC (NO conversion)
+    $expirationDate = Time::parse($dateExpiry, 'UTC');
+} else {
+    // Manual web UI - convert from user timezone to UTC
+    $expirationDate = Time::parse($dateExpiry, $userTimezone);
+    $expirationDate = $expirationDate->setTimezone('UTC');
+}
+```
+
+**Implementation**:
+- **Files**: `app/Controllers/Api.php` (createLicense & editLicense methods)
+- **Detection**: Checks `item_reference` parameter for 'woocommerce' value
+- **Logging**: 24+ `[TIMEZONE]` log messages for debugging
+- **Backward Compatible**: Existing web UI functionality unchanged
+
+**Usage in API Calls**:
+- **WooCommerce/External**: Add `item_reference=woocommerce` parameter
+- **Manual Web UI**: Omit item_reference or use other values
+
+### Bulletproof License Retrieval System ✅
+
+**Problem Solved**: Subscription renewals failed to retrieve licenses because purchase IDs change with each renewal.
+
+**Solution**: Three-tier endpoint strategy with OR logic:
+
+#### 1. Enhanced Primary Endpoint
+```
+GET /api/license/data/{secret_key}/{purchase_id}/{product_name}
+```
+- Searches by BOTH `purchase_id_` OR `txn_id` fields
+- Works for initial orders AND all renewals
+- Backward compatible
+
+#### 2. Transaction-Specific Endpoint (NEW)
+```
+GET /api/license/data-by-txn/{secret_key}/{txn_id}/{product_name}
+```
+- Direct txn_id lookup
+- For renewals where txn_id is stable
+
+#### 3. License Key Direct Lookup (NEW - ULTIMATE FALLBACK)
+```
+GET /api/license/data-by-key/{secret_key}/{license_key}
+```
+- No product name required
+- Always works if you have the license key
+- Perfect for order meta storage
+
+**Cascading Fallback Strategy** (Recommended for WooCommerce):
+```
+STEP 1: Try /license/data with current order ID
+  → Leverages OR logic automatically
+
+STEP 2: Try /license/data with parent order ID (if renewal)
+  → Additional reliability layer
+
+STEP 3: Use /license/data-by-key with stored license key
+  → Ultimate fallback from order meta
+```
+
+**Route Configuration** (`app/Config/Routes.php`):
+```php
+$routes->get("license/data/(:any)/(:any)/(:any)", 'Api::retrieveLicense/$1/$2/$3');
+$routes->get("license/data-by-txn/(:any)/(:any)/(:any)", 'Api::retrieveLicenseByTxn/$1/$2/$3');
+$routes->get("license/data-by-key/(:any)/(:any)", 'Api::retrieveLicenseByKey/$1/$2');
+```
+
 ## Environment Setup
 
 1. Ensure PHP 8.1+ with required extensions (intl, mbstring, etc.)

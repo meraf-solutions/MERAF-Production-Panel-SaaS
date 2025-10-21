@@ -468,6 +468,199 @@ protected function getUserID(): ?int
     }
 
     return null;
+}
 ```
 
-This multi-tenant SaaS technical implementation provides enterprise-grade security, complete tenant isolation, and scalable architecture suitable for production deployment with multiple customers.
+### 6. Timezone-Aware License Processing ✅ **CRITICAL BUG FIX**
+
+#### Problem Statement
+
+External integrations (WooCommerce, payment gateways) send license expiry dates in **UTC timezone**. However, the API was incorrectly treating these UTC dates as local timezone (e.g., Asia/Manila UTC+8), causing **double timezone conversion** and resulting in **8-hour time loss** on every license creation/renewal.
+
+#### Solution: Source-Aware Timezone Detection
+
+**Implementation in `Api.php`** (createLicense & editLicense methods):
+
+```php
+/**
+ * Timezone-aware license creation
+ * Detects source of API call and handles dates accordingly
+ */
+public function createLicense()
+{
+    // ... validation code ...
+
+    if ($data['license_type'] !== 'lifetime') {
+        if (($data['date_expiry'] !== null) && ($data['date_expiry'] !== '')) {
+
+            // TIMEZONE HANDLING LOGIC
+            $dateExpiry = $data['date_expiry'];
+
+            // Detect WooCommerce/external integration calls
+            $isWooCommerceCall = isset($data['item_reference']) &&
+                                 $data['item_reference'] === 'woocommerce';
+
+            if ($isWooCommerceCall) {
+                // WooCommerce sends dates in UTC - parse as UTC (NO conversion)
+                $expirationDate = Time::parse($dateExpiry, 'UTC');
+
+                log_message('info', '[TIMEZONE] WooCommerce API call detected (createLicense) - treating date_expiry as UTC');
+                log_message('info', '[TIMEZONE] Received date_expiry: ' . $dateExpiry);
+                log_message('info', '[TIMEZONE] Parsed as UTC: ' . $expirationDate->format('Y-m-d H:i:s'));
+
+                // Store directly in UTC
+                $data['date_expiry'] = $expirationDate->format('Y-m-d H:i:s');
+
+                log_message('info', '[TIMEZONE] Final date_expiry for database: ' . $data['date_expiry']);
+
+            } else {
+                // Manual web UI call - convert from user timezone to UTC
+                $userTimezone = app_timezone();
+
+                log_message('info', '[TIMEZONE] Manual web UI call detected - converting from user timezone');
+                log_message('info', '[TIMEZONE] User timezone: ' . $userTimezone);
+                log_message('info', '[TIMEZONE] Received date_expiry: ' . $dateExpiry);
+
+                // Parse in user timezone, then convert to UTC
+                $expirationDate = Time::parse($dateExpiry, $userTimezone);
+                log_message('info', '[TIMEZONE] Parsed in user timezone: ' . $expirationDate->format('Y-m-d H:i:s T'));
+
+                $expirationDate = $expirationDate->setTimezone('UTC');
+                log_message('info', '[TIMEZONE] Converted to UTC: ' . $expirationDate->format('Y-m-d H:i:s'));
+
+                $data['date_expiry'] = $expirationDate->format('Y-m-d H:i:s');
+
+                log_message('info', '[TIMEZONE] Final date_expiry for database: ' . $data['date_expiry']);
+            }
+        }
+    }
+
+    // ... license creation code ...
+}
+```
+
+#### Key Technical Features
+
+**Detection Method**:
+- Checks `item_reference` parameter value
+- If `item_reference === 'woocommerce'` → treat as UTC
+- Otherwise → convert from user timezone to UTC
+
+**Logging Infrastructure**:
+- **24+ log messages** with `[TIMEZONE]` prefix for debugging
+- Logs received date, parsed date, converted date, and final database value
+- Enables easy troubleshooting of timezone-related issues
+
+**Backward Compatibility**:
+- Manual web UI functionality unchanged
+- Existing integrations work without modification
+- Only WooCommerce-specific calls use UTC detection
+
+**Benefits**:
+- ✅ **Eliminates 8-hour time loss** from double timezone conversion
+- ✅ **Correct subscription renewal expiry dates**
+- ✅ **Accurate trial period calculations**
+- ✅ **Proper license expiration tracking**
+
+#### Usage in External Integrations
+
+**WooCommerce Plugin Example**:
+```php
+// Calculate expiry in UTC
+$expiry_date_obj = new DateTime($existing_expiry_date, new DateTimeZone('UTC'));
+$expiry_date_obj->modify('+1 month');
+$calculated_new_expiry = $expiry_date_obj->format('Y-m-d H:i:s');
+
+// Send to Production Panel API with item_reference
+$update_params = [
+    'license_key' => $license_key,
+    'date_expiry' => $calculated_new_expiry,  // Already in UTC
+    'item_reference' => 'woocommerce'         // CRITICAL: Tells API it's UTC
+];
+
+$api_url = $prodPanelURL . 'api/license/edit/' . $secret_key;
+$response = wp_remote_post($api_url, ['body' => json_encode($update_params)]);
+```
+
+**Result**: Date stored exactly as calculated, no timezone conversion applied.
+
+### 7. Enhanced License Retrieval System ✅ **BULLETPROOF ARCHITECTURE**
+
+#### Three-Tier Endpoint Strategy
+
+**Problem**: Subscription renewals have changing purchase IDs, making license retrieval unreliable.
+
+**Solution**: Three specialized endpoints with OR logic and fallback mechanisms.
+
+#### Implementation Details
+
+**1. Primary Endpoint with OR Logic** (`Api.php::retrieveLicense`):
+```php
+public function retrieveLicense($secretKey, $purchaseID, $productName)
+{
+    // ... authentication ...
+
+    // Enhanced query with OR logic
+    $licenseDetails = $this->LicensesModel
+        ->like('product_ref', $productName)
+        ->groupStart()
+            ->where('purchase_id_', $purchaseID)  // Try purchase_id_ first
+            ->orWhere('txn_id', $purchaseID)      // OR try txn_id
+        ->groupEnd()
+        ->first();
+
+    if ($licenseDetails) {
+        return $this->respond($licenseDetails, 200);
+    }
+
+    return $this->respond(['error' => 'License not found'], 404);
+}
+```
+
+**2. Transaction-Specific Endpoint** (`Api.php::retrieveLicenseByTxn`):
+```php
+public function retrieveLicenseByTxn($secretKey, $txnID, $productName)
+{
+    // ... authentication ...
+
+    // Direct txn_id search
+    $licenseDetails = $this->LicensesModel
+        ->like('product_ref', $productName)
+        ->where('txn_id', $txnID)
+        ->first();
+
+    return $licenseDetails
+        ? $this->respond($licenseDetails, 200)
+        : $this->respond(['error' => 'License not found'], 404);
+}
+```
+
+**3. License Key Direct Lookup** (`Api.php::retrieveLicenseByKey`):
+```php
+public function retrieveLicenseByKey($secretKey, $licenseKey)
+{
+    // ... authentication ...
+
+    // Simple, direct lookup - no product name needed
+    $licenseDetails = $this->LicensesModel
+        ->where('license_key', $licenseKey)
+        ->first();
+
+    return $licenseDetails
+        ? $this->respond($licenseDetails, 200)
+        : $this->respond(['error' => 'License not found'], 404);
+}
+```
+
+#### Route Configuration
+
+**File**: `app/Config/Routes.php` (lines 265-266)
+
+```php
+// Enhanced license retrieval endpoints
+$routes->get("license/data/(:any)/(:any)/(:any)", 'Api::retrieveLicense/$1/$2/$3');
+$routes->get("license/data-by-txn/(:any)/(:any)/(:any)", 'Api::retrieveLicenseByTxn/$1/$2/$3');
+$routes->get("license/data-by-key/(:any)/(:any)", 'Api::retrieveLicenseByKey/$1/$2');
+```
+
+This multi-tenant SaaS technical implementation provides enterprise-grade security, complete tenant isolation, timezone-aware processing, and scalable architecture suitable for production deployment with multiple customers.

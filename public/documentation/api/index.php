@@ -68,8 +68,8 @@ if (isset($_COOKIE['meraf_app_info'])) {
 			<div class="mobile-menu-closer"></div>
 			<div class="content-menu">
 				<div class="content-infos">
-					<div class="info"><b>Version:</b> 2.1.0</div>
-					<div class="info"><b>Last Updated:</b> 17th Sep, 2025</div>
+					<div class="info"><b>Version:</b> 2.2.0</div>
+					<div class="info"><b>Last Updated:</b> 20th Oct, 2025</div>
 				</div>
 				<ul>
 					<li class="scroll-to-link active" data-target="content-get-started">
@@ -98,6 +98,12 @@ if (isset($_COOKIE['meraf_app_info'])) {
 					</li>
 					<li class="scroll-to-link" data-target="content-retrieve-license">
 						<a>Retrieve License Data</a>
+					</li>
+					<li class="scroll-to-link" data-target="content-retrieve-license-by-txn">
+						<a>Retrieve by Transaction ID</a>
+					</li>
+					<li class="scroll-to-link" data-target="content-retrieve-license-by-key">
+						<a>Retrieve by License Key</a>
 					</li>
                     <li class="scroll-to-link" data-target="content-create-new-license">
 						<a>Create New License</a>
@@ -933,13 +939,16 @@ Error result example :
 					</table>
 				</div>
 				<div class="overflow-hidden content-section" id="content-retrieve-license">
-					<h2>Retrieve License Data</h2>
+					<h2>Retrieve License Data (Robust - Primary Method)</h2>
 					<pre><code class="bash">
 curl -H 'User-API-Key: 123abc' -X GET '<?= base_url() ?>/api/license/data/{secret_key}/{purchase_id}/{product_name}
 					</code></pre>
 					<p>
-						To retrieve the license data using purchase ID and product name as references
+						Primary method for retrieving license data with intelligent dual-field search.<br>
 						<code class="higlighted break-word">/license/data/{secret_key}/{purchase_id}/{product_name}</code>
+					</p>
+					<p>
+						This endpoint searches for licenses using BOTH the purchase_id_ field OR the txn_id field, making it robust for initial orders and renewals. For more specific searches, see the specialized endpoints below.
 					</p>
 					<br>
 					<pre><code class="json">
@@ -1010,6 +1019,202 @@ Error result example :
 						</tbody>
 					</table>
 				</div>				
+				<div class="overflow-hidden content-section" id="content-retrieve-license-by-txn">
+					<h2>Retrieve License by Transaction ID</h2>
+					<pre><code class="bash">
+curl -H 'User-API-Key: 123abc' -X GET '<?= base_url() ?>/api/license/data-by-txn/{secret_key}/{txn_id}/{product_name}'
+					</code></pre>
+					<p>
+						Specifically retrieves license data using transaction ID (txn_id field) as the primary search criterion.<br>
+						<code class="higlighted break-word">/license/data-by-txn/{secret_key}/{txn_id}/{product_name}</code>
+					</p>
+					<p>
+						This endpoint provides more precise matching by searching ONLY the txn_id field, unlike the general /license/data endpoint which searches both purchase_id_ OR txn_id fields.
+					</p>
+					<p>
+						<strong>Use cases:</strong>
+						<ul>
+							<li>When you need to retrieve licenses specifically by their transaction ID</li>
+							<li>When the transaction ID is distinct from the purchase ID</li>
+							<li>When you want to avoid ambiguity in dual-field searches</li>
+						</ul>
+					</p>
+					<br>
+					<pre><code class="json">
+Success result example :
+
+{
+	"id": "170",
+	"license_key": "VN8S8UOUH0E9YM780E3E3WR2M4CBKQBO8QGYU7TG",
+	"max_allowed_domains": "1",
+	"max_allowed_devices": "0",
+	"license_status": "active",
+	"license_type": "lifetime",
+	"first_name": "John",
+	"last_name": "Doe",
+	"email": "contact@merafsolutions.com",
+	"item_reference": "Special Product Sample",
+	"company_name": "ABC Corp",
+	"txn_id": "UBSKC8G6NS",
+	"manual_reset_count": "",
+	"purchase_id_": "88S72039A8975545M",
+	"date_created": "2024-10-01 08:41:18",
+	"date_activated": "2024-10-01 08:41:18",
+	"date_renewed": null,
+	"date_expiry": null,
+	"reminder_sent": "1",
+	"reminder_sent_date": "2024-10-02 08:46:28",
+	"product_ref": "Special Product Sample",
+	"until": "",
+	"current_ver": "",
+	"subscr_id": "2679",
+	"billing_length": "",
+	"billing_interval": "onetime"
+}
+
+Error result example :
+
+{
+	"result": "error",
+	"message": "License key not found",
+	"error_code": 60
+}
+					</code></pre>
+					<h4>QUERY PARAMETERS</h4>
+					<table class="central-overflow-x">
+						<thead>
+						<tr>
+							<th>Field</th>
+							<th>Type</th>
+							<th>Description</th>
+						</tr>
+						</thead>
+						<tbody>
+						<tr>
+							<td>secret_key</td>
+							<td>String</td>
+							<td>Your license general secret key</td>
+						</tr>
+						<tr>
+							<td>txn_id</td>
+							<td>String</td>
+							<td>Transaction ID for query (searches ONLY txn_id field)</td>
+						</tr>
+						<tr>
+							<td>product_name</td>
+							<td>String</td>
+							<td>Product name the license registered to</td>
+						</tr>
+						</tbody>
+					</table>
+				</div>
+				<div class="overflow-hidden content-section" id="content-retrieve-license-by-key">
+					<h2>Retrieve License by License Key (Ultimate Fallback)</h2>
+					<pre><code class="bash">
+curl -H 'User-API-Key: 123abc' -X GET '<?= base_url() ?>/api/license/data-by-key/{secret_key}/{license_key}'
+					</code></pre>
+					<p>
+						Retrieves license data using ONLY the license key as the search criterion.<br>
+						<code class="higlighted break-word">/license/data-by-key/{secret_key}/{license_key}</code>
+					</p>
+					<p>
+						This endpoint is the most reliable retrieval method when you have the license key. It does NOT require product name, making it ideal as an ultimate fallback in cascading retrieval strategies.
+					</p>
+					<p>
+						<strong>Use cases:</strong>
+						<ul>
+							<li><strong>Subscription renewals:</strong> Retrieve existing license using stored license key from previous order</li>
+							<li><strong>Ultimate fallback:</strong> When other retrieval methods fail (purchase ID, transaction ID)</li>
+							<li><strong>Direct lookup:</strong> When you only have the license key and not the product name</li>
+							<li><strong>Cross-product queries:</strong> When the license key is known but product reference might vary</li>
+						</ul>
+					</p>
+					<p>
+						<strong style="color: red">Cascading Fallback Strategy:</strong>
+					</p>
+					<p>
+						This endpoint is designed as part of a bulletproof three-tier retrieval strategy:
+						<ol>
+							<li><strong>ATTEMPT 1:</strong> Try /license/data with current purchase/order ID</li>
+							<li><strong>ATTEMPT 2:</strong> Try /license/data with parent order ID (for renewals)</li>
+							<li><strong>ATTEMPT 3:</strong> Try /license/data-by-key with stored license key (ULTIMATE FALLBACK)</li>
+						</ol>
+					</p>
+					<br>
+					<pre><code class="json">
+Success result example :
+
+{
+	"id": "170",
+	"license_key": "VN8S8UOUH0E9YM780E3E3WR2M4CBKQBO8QGYU7TG",
+	"max_allowed_domains": "1",
+	"max_allowed_devices": "0",
+	"license_status": "active",
+	"license_type": "subscription",
+	"first_name": "John",
+	"last_name": "Doe",
+	"email": "contact@merafsolutions.com",
+	"item_reference": "Special Product Sample",
+	"company_name": "ABC Corp",
+	"txn_id": "UBSKC8G6NS",
+	"manual_reset_count": "",
+	"purchase_id_": "88S72039A8975545M",
+	"date_created": "2024-10-01 08:41:18",
+	"date_activated": "2024-10-01 08:41:18",
+	"date_renewed": "2024-11-01 08:41:18",
+	"date_expiry": "2024-12-01 08:41:18",
+	"reminder_sent": "1",
+	"reminder_sent_date": "2024-10-02 08:46:28",
+	"product_ref": "Special Product Sample",
+	"until": "",
+	"current_ver": "",
+	"subscr_id": "2679",
+	"billing_length": "1",
+	"billing_interval": "months"
+}
+
+Error result example (invalid license key format):
+
+{
+	"result": "error",
+	"message": "Invalid license key format. License key must be exactly 40 characters.",
+	"error_code": 60
+}
+
+Error result example (license not found):
+
+{
+	"result": "error",
+	"message": "License key not found",
+	"error_code": 60
+}
+					</code></pre>
+					<h4>QUERY PARAMETERS</h4>
+					<table class="central-overflow-x">
+						<thead>
+						<tr>
+							<th>Field</th>
+							<th>Type</th>
+							<th>Description</th>
+						</tr>
+						</thead>
+						<tbody>
+						<tr>
+							<td>secret_key</td>
+							<td>String</td>
+							<td>Your license general secret key</td>
+						</tr>
+						<tr>
+							<td>license_key</td>
+							<td>String</td>
+							<td>40-character license key for direct lookup (no product name required)</td>
+						</tr>
+						</tbody>
+					</table>
+					<p>
+						<span style="color: red">NOTE</span>: This endpoint validates that the license key is exactly 40 characters before attempting lookup, ensuring data integrity.
+					</p>
+				</div>
                 <div class="overflow-hidden content-section" id="content-create-new-license">
 					<h2>Create new license</h2>
 					<pre><code class="bash">

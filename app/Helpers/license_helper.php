@@ -290,7 +290,7 @@ if (!function_exists('individualLicenseParamValidations')) {
         }
 
 		// Check if product exists
-		if (!in_array(productBasename($postData['product_ref'], $userID), productList())) {
+		if (!in_array(productBasename($postData['product_ref'], $userID), productList($userID))) {
 			$response = [
 				'success' => false,
 				'status' => 0,

@@ -692,11 +692,20 @@ class Api extends ResourceController
             ];
 
             return $this->respondCreated($response);
-        } else {            
-            $licenseDetails = $this->LicensesModel->where('owner_id', $this->userID)
-                                                    ->where('purchase_id_', $purchaseID)
-                                                    ->like('product_ref', $productName)
-                                                    ->first();
+        } else {
+            // ROBUST SEARCH: Search by BOTH purchase_id_ OR txn_id to handle:
+            // 1. Initial orders (where purchase_id_ matches)
+            // 2. Renewals using parent order ID (where txn_id matches)
+            // 3. Renewals using original purchase_id (where purchase_id_ might still match)
+            // This makes the endpoint work for all scenarios without needing different endpoints
+            $licenseDetails = $this->LicensesModel
+                ->where('owner_id', $this->userID)
+                ->like('product_ref', $productName)
+                ->groupStart()
+                    ->where('purchase_id_', $purchaseID)
+                    ->orWhere('txn_id', $purchaseID)
+                ->groupEnd()
+                ->first();
 
             if ($licenseDetails) {
                 return $this->respondCreated($licenseDetails);
@@ -708,9 +717,110 @@ class Api extends ResourceController
                 ];
 
                 return $this->respondCreated($response);
-            }                                            
+            }
         }
-    }   
+    }
+
+    /**
+     * Action: data by transaction ID
+     * URI: /api/license/data-by-txn/{secret_key}/{txn_id}/{product_name}
+     * Method: GET
+     * Description: Retrieve the license data using transaction ID and product name as references.
+     *              This is more reliable for subscription renewals since txn_id remains constant.
+     * Parameters:
+     * - $secretKey (required): A secret key for authorization.
+     * - $txnID (required): The transaction ID of the license (usually the parent/original order ID).
+     * - $productName (required): The name of the product.
+     * @return mixed The response containing the license details or an error message.
+     */
+    public function retrieveLicenseByTxn($secretKey, $txnID, $productName)
+    {
+        $authResult = $this->authorizeSecretKey('general', $secretKey);
+        if ($authResult !== true) {
+            return $authResult; // Return the unauthorized response
+        }
+
+        $productName = $this->stripValue($productName);
+
+        // Check if the queried product exists
+        if (!in_array($productName, productList($this->userID))) {
+            $response = [
+                'result'     => 'error',
+                'message'    => 'Product does not exist.',
+                'error_code' => QUERY_NOT_FOUND
+            ];
+
+            return $this->respondCreated($response);
+        } else {
+            $licenseDetails = $this->LicensesModel
+                ->where('owner_id', $this->userID)
+                ->where('txn_id', $txnID)
+                ->like('product_ref', $productName)
+                ->first();
+
+            if ($licenseDetails) {
+                return $this->respondCreated($licenseDetails);
+            } else {
+                $response = [
+                    'result'     => 'error',
+                    'message'    => 'License key not found.',
+                    'error_code' => RETURNED_EMPTY
+                ];
+
+                return $this->respondCreated($response);
+            }
+        }
+    }
+
+    /**
+     * Action: data by license key
+     * URI: /api/license/data-by-key/{secret_key}/{license_key}
+     * Method: GET
+     * Description: Retrieve the license data using only the license key.
+     *              This is the simplest and most direct retrieval method - no product name needed.
+     *              Use this as a final fallback when other methods fail.
+     * Parameters:
+     * - $secretKey (required): A secret key for authorization.
+     * - $licenseKey (required): The license key to retrieve.
+     * @return mixed The response containing the license details or an error message.
+     */
+    public function retrieveLicenseByKey($secretKey, $licenseKey)
+    {
+        $authResult = $this->authorizeSecretKey('general', $secretKey);
+        if ($authResult !== true) {
+            return $authResult; // Return the unauthorized response
+        }
+
+        // Validate license key format
+        $licenseKey = trim($licenseKey);
+        if (empty($licenseKey) || strlen($licenseKey) !== 40) {
+            $response = [
+                'result'     => 'error',
+                'message'    => 'Invalid license key format.',
+                'error_code' => QUERY_NOT_FOUND
+            ];
+
+            return $this->respondCreated($response);
+        }
+
+        // Simple, direct lookup by license key
+        $licenseDetails = $this->LicensesModel
+            ->where('owner_id', $this->userID)
+            ->where('license_key', $licenseKey)
+            ->first();
+
+        if ($licenseDetails) {
+            return $this->respondCreated($licenseDetails);
+        } else {
+            $response = [
+                'result'     => 'error',
+                'message'    => 'License key not found.',
+                'error_code' => RETURNED_EMPTY
+            ];
+
+            return $this->respondCreated($response);
+        }
+    }
 
     /**
      * Action: create new license
@@ -843,51 +953,79 @@ class Api extends ResourceController
         // reformat the date_expiry if present
         if($data['license_type'] !== 'lifetime') {
             if ( ($data['date_expiry'] !== null) && ($data['date_expiry'] !== '')) {
-                // App's default timezone
+                // TIMEZONE HANDLING LOGIC
+                // Check if this is an API call from WooCommerce or similar integration
+                // WooCommerce plugin sets item_reference = 'woocommerce' and sends dates in UTC
+                $isWooCommerceCall = isset($data['item_reference']) &&
+                                   $data['item_reference'] === 'woocommerce';
+
+                // App's default timezone (UTC)
                 $appTimezone = app_timezone();
-    
-                // Parse the date with the user's timezone
-                $dateCreated = $data['date_created'];
-                $dateCreated = Time::parse($dateCreated, $appTimezone);
-    
+
                 // Remove AM/PM and convert to 24-hour format
                 $dateExpiry = $data['date_expiry'];
                 $is_pm = stripos($dateExpiry, 'PM') !== false;
                 $dateExpiry = trim(str_replace(['AM', 'PM'], '', $dateExpiry));
-    
-                // Parse the expiration date in the user's timezone
-                $expirationDate = Time::parse($dateExpiry, $appTimezone);
-    
-                // Convert to app's default timezone
-                $expirationDate = $expirationDate->setTimezone($appTimezone);
-    
-                // Convert to 24-hour format if needed
-                if ($is_pm) {
-                    $hour = $expirationDate->getHour();
-                    if ($hour !== 12) {
-                        $expirationDate = $expirationDate->setTime($hour + 12, $expirationDate->getMinute(), $expirationDate->getSecond());
-                    }
-                } else {
-                    // Handle midnight (12 AM)
-                    $hour = $expirationDate->getHour();
-                    if ($hour === 12) {
-                        $expirationDate = $expirationDate->setTime(0, $expirationDate->getMinute(), $expirationDate->getSecond());
-                    }
-                }
-    
-                // Check if the time is '00:00:00'
-                if ($expirationDate->getHour() === 0 && $expirationDate->getMinute() === 0) {
-                    // Set the time to the same as the creation date
-                    $data['date_expiry'] = $expirationDate
-                        ->setTime(
-                            $dateCreated->getHour(), 
-                            $dateCreated->getMinute(), 
-                            $dateCreated->getSecond()
-                        )
-                        ->format('Y-m-d H:i:s');
-                } else {
-                    // Convert to standard database format
+
+                if ($isWooCommerceCall) {
+                    // WooCommerce sends dates already in UTC format
+                    // No timezone conversion needed - parse as UTC directly
+                    log_message('info', '[TIMEZONE] WooCommerce API call detected (createLicense) - treating date_expiry as UTC');
+                    log_message('info', '[TIMEZONE] Received date_expiry: ' . $dateExpiry);
+
+                    $expirationDate = Time::parse($dateExpiry, 'UTC');
+
+                    log_message('info', '[TIMEZONE] Parsed as UTC: ' . $expirationDate->format('Y-m-d H:i:s'));
+
+                    // Store as-is in UTC format
                     $data['date_expiry'] = $expirationDate->format('Y-m-d H:i:s');
+
+                    log_message('info', '[TIMEZONE] Final date_expiry for database: ' . $data['date_expiry']);
+
+                } else {
+                    // Manual web UI - dates are expected in UTC for createLicense endpoint
+                    // (Note: createLicense is typically called via API, not web UI)
+                    log_message('info', '[TIMEZONE] Non-WooCommerce API call (createLicense) - treating as UTC');
+
+                    // Parse the date with the user's timezone
+                    $dateCreated = Time::parse($data['date_created'], $appTimezone);
+
+                    // Parse the expiration date in UTC
+                    $expirationDate = Time::parse($dateExpiry, $appTimezone);
+
+                    // Already in UTC, no conversion needed
+                    $expirationDate = $expirationDate->setTimezone($appTimezone);
+
+                    // Convert to 24-hour format if needed
+                    if ($is_pm) {
+                        $hour = $expirationDate->getHour();
+                        if ($hour !== 12) {
+                            $expirationDate = $expirationDate->setTime($hour + 12, $expirationDate->getMinute(), $expirationDate->getSecond());
+                        }
+                    } else {
+                        // Handle midnight (12 AM)
+                        $hour = $expirationDate->getHour();
+                        if ($hour === 12) {
+                            $expirationDate = $expirationDate->setTime(0, $expirationDate->getMinute(), $expirationDate->getSecond());
+                        }
+                    }
+
+                    // Check if the time is '00:00:00'
+                    if ($expirationDate->getHour() === 0 && $expirationDate->getMinute() === 0) {
+                        // Set the time to the same as the creation date
+                        $data['date_expiry'] = $expirationDate
+                            ->setTime(
+                                $dateCreated->getHour(),
+                                $dateCreated->getMinute(),
+                                $dateCreated->getSecond()
+                            )
+                            ->format('Y-m-d H:i:s');
+                    } else {
+                        // Convert to standard database format
+                        $data['date_expiry'] = $expirationDate->format('Y-m-d H:i:s');
+                    }
+
+                    log_message('info', '[TIMEZONE] Final date_expiry for database: ' . $data['date_expiry']);
                 }
             }
             else {
@@ -896,7 +1034,7 @@ class Api extends ResourceController
                     'message'    => lang('Notifications.incorrectDateFormatEditLicense'),
                     'error_code' => CREATE_FAILED
                 ];
-                
+
                 return $this->respondCreated($response);
             }
         }
@@ -2926,61 +3064,109 @@ class Api extends ResourceController
         try {
             if($targetLicense) {
                 
-                // reformat the date_expiry if present and needed
-                if ( isset($postedData['date_expiry']) && ($postedData['date_expiry'] !== null) && ($postedData['date_expiry'] !== '') && $postedData['license_type'] !== 'lifetime') {
-                    // User's timezone from configuration
+                // reformat the date_expiry if present
+                if($postedData['license_type'] !== 'lifetime') {
+                    if ( ($postedData['date_expiry'] !== null) && ($postedData['date_expiry'] !== '') ) {
+                        // TIMEZONE HANDLING LOGIC
+                        // Determine if the date is already in UTC (from API calls like WooCommerce)
+                        // or in user's local timezone (from web UI manual edits)
 
-                    // First check session for detected timezone
-                    $session = session();
-					$userTimezone = $session->get('detected_timezone') ??
-									$this->myConfig['defaultTimezone'] ??
-									'UTC';
+                        // Check if this is an API call from WooCommerce or similar integration
+                        // WooCommerce plugin sets item_reference = 'woocommerce' and sends dates in UTC
+                        $isWooCommerceCall = isset($postedData['item_reference']) &&
+                                           $postedData['item_reference'] === 'woocommerce';
 
-                    // App's default timezone
-                    $appTimezone = app_timezone();
+                        // App's default timezone (UTC)
+                        $appTimezone = app_timezone();
 
-                    // Parse the date with the user's timezone
-                    $dateCreated = getLicenseData($postedData['license_key'], 'date_created');
-                    $dateCreated = Time::parse($dateCreated, $appTimezone);
+                        // Remove AM/PM and convert to 24-hour format
+                        $dateExpiry = $postedData['date_expiry'];
+                        $is_pm = stripos($dateExpiry, 'PM') !== false;
+                        $dateExpiry = trim(str_replace(['AM', 'PM'], '', $dateExpiry));
 
-                    // Remove AM/PM and convert to 24-hour format
-                    $dateExpiry = $postedData['date_expiry'];
-                    $is_pm = stripos($dateExpiry, 'PM') !== false;
-                    $dateExpiry = trim(str_replace(['AM', 'PM'], '', $dateExpiry));
+                        if ($isWooCommerceCall) {
+                            // WooCommerce sends dates already in UTC format
+                            // No timezone conversion needed - parse as UTC directly
+                            log_message('info', '[TIMEZONE] WooCommerce API call detected - treating date_expiry as UTC');
+                            log_message('info', '[TIMEZONE] Received date_expiry: ' . $dateExpiry);
 
-                    // Parse the expiration date in the user's timezone
-                    $expirationDate = Time::parse($dateExpiry, $userTimezone);
+                            $expirationDate = Time::parse($dateExpiry, 'UTC');
 
-                    // Convert to app's default timezone
-                    $expirationDate = $expirationDate->setTimezone($appTimezone);
+                            log_message('info', '[TIMEZONE] Parsed as UTC: ' . $expirationDate->format('Y-m-d H:i:s'));
 
-                    // Convert to 24-hour format if needed
-                    if ($is_pm) {
-                        $hour = $expirationDate->getHour();
-                        if ($hour !== 12) {
-                            $expirationDate = $expirationDate->setTime($hour + 12, $expirationDate->getMinute(), $expirationDate->getSecond());
-                        }
-                    } else {
-                        // Handle midnight (12 AM)
-                        $hour = $expirationDate->getHour();
-                        if ($hour === 12) {
-                            $expirationDate = $expirationDate->setTime(0, $expirationDate->getMinute(), $expirationDate->getSecond());
+                            // Store as-is in UTC format
+                            $postedData['date_expiry'] = $expirationDate->format('Y-m-d H:i:s');
+
+                            log_message('info', '[TIMEZONE] Final date_expiry for database: ' . $postedData['date_expiry']);
+
+                        } else {
+                            // Manual web UI edit - date is in user's local timezone
+                            // Need to convert from user timezone to UTC
+
+                            // Get user's timezone from configuration
+                            $session = session();
+                            $userTimezone = $session->get('detected_timezone') ??
+                                            $this->myConfig['defaultTimezone'] ??
+                                            'UTC';
+
+                            log_message('info', '[TIMEZONE] Manual web UI call detected - converting from user timezone');
+                            log_message('info', '[TIMEZONE] User timezone: ' . $userTimezone);
+                            log_message('info', '[TIMEZONE] Received date_expiry: ' . $dateExpiry);
+
+                            // Parse the date with the user's timezone
+                            $dateCreated = getLicenseData($postedData['license_key'], 'date_created');
+                            $dateCreated = Time::parse($dateCreated, $appTimezone);
+
+                            // Parse the expiration date in the user's timezone
+                            $expirationDate = Time::parse($dateExpiry, $userTimezone);
+
+                            log_message('info', '[TIMEZONE] Parsed in user timezone: ' . $expirationDate->format('Y-m-d H:i:s T'));
+
+                            // Convert to app's default timezone (UTC)
+                            $expirationDate = $expirationDate->setTimezone($appTimezone);
+
+                            log_message('info', '[TIMEZONE] Converted to UTC: ' . $expirationDate->format('Y-m-d H:i:s'));
+
+                            // Convert to 24-hour format if needed
+                            if ($is_pm) {
+                                $hour = $expirationDate->getHour();
+                                if ($hour !== 12) {
+                                    $expirationDate = $expirationDate->setTime($hour + 12, $expirationDate->getMinute(), $expirationDate->getSecond());
+                                }
+                            } else {
+                                // Handle midnight (12 AM)
+                                $hour = $expirationDate->getHour();
+                                if ($hour === 12) {
+                                    $expirationDate = $expirationDate->setTime(0, $expirationDate->getMinute(), $expirationDate->getSecond());
+                                }
+                            }
+
+                            // Check if the time is '00:00:00'
+                            if ($expirationDate->getHour() === 0 && $expirationDate->getMinute() === 0) {
+                                // Set the time to the same as the creation date
+                                $postedData['date_expiry'] = $expirationDate
+                                    ->setTime(
+                                        $dateCreated->getHour(),
+                                        $dateCreated->getMinute(),
+                                        $dateCreated->getSecond()
+                                    )
+                                    ->format('Y-m-d H:i:s');
+                            } else {
+                                // Convert to standard database format
+                                $postedData['date_expiry'] = $expirationDate->format('Y-m-d H:i:s');
+                            }
+
+                            log_message('info', '[TIMEZONE] Final date_expiry for database: ' . $postedData['date_expiry']);
                         }
                     }
+                    else {
+                        $response = [
+                            'result'     => 'error',
+                            'message'    => lang('Notifications.incorrectDateFormatEditLicense'),
+                            'error_code' => KEY_UPDATE_FAILED
+                        ];
 
-                    // Check if the time is '00:00:00'
-                    if ($expirationDate->getHour() === 0 && $expirationDate->getMinute() === 0) {
-                        // Set the time to the same as the creation date
-                        $postedData['date_expiry'] = $expirationDate
-                            ->setTime(
-                                $dateCreated->getHour(),
-                                $dateCreated->getMinute(),
-                                $dateCreated->getSecond()
-                            )
-                            ->format('Y-m-d H:i:s');
-                    } else {
-                        // Convert to standard database format
-                        $postedData['date_expiry'] = $expirationDate->format('Y-m-d H:i:s');
+                        return $this->respondCreated($response);
                     }
                 }
                 // For non-lifetime licenses that require expiry dates, check if date_expiry is provided

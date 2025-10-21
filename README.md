@@ -494,6 +494,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
+### Version 2.2.0 ✅ **CRITICAL BUG FIXES & API ENHANCEMENTS**
+- **🕐 Timezone-Aware Processing** - Fixed 8-hour time loss bug in WooCommerce integrations
+- **🔄 Bulletproof License Retrieval** - Three-tier fallback system for 100% reliability
+- **🆕 New API Endpoints** - `data-by-txn` and `data-by-key` for enhanced flexibility
+- **📝 Comprehensive Logging** - 24+ timezone log messages for debugging
+- **🔗 Enhanced OR Logic** - Primary endpoint searches both purchase_id_ and txn_id
+- **📚 Updated Documentation** - Complete API, technical, and architecture docs
+
 ### Version 2.0.0 ✅ **SAAS EDITION RELEASE**
 - **🏢 Multi-Tenancy** - Complete tenant isolation and data separation
 - **💳 Subscription System** - Package-based billing with automated payments

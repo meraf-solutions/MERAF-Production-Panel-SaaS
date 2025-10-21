@@ -149,7 +149,7 @@ CREATE TABLE `licenses` (
   `current_ver` varchar(255) NOT NULL,
   `subscr_id` varchar(128) NOT NULL,
   `billing_length` varchar(255) NOT NULL,
-  `billing_interval` enum('days','months','years','onetime') NOT NULL DEFAULT 'days',
+  `billing_interval` enum('days','weeks','months','years','onetime') NOT NULL DEFAULT 'days',
   PRIMARY KEY (`id`),
   UNIQUE KEY `license_key` (`license_key`),
   KEY `owner_id` (`owner_id`),
