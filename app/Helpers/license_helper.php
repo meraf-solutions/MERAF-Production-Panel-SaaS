@@ -385,6 +385,9 @@ if (!function_exists('checkToUpdateWooCommerce')) {
     {
         $licensesModel = model('LicensesModel');
         $licenseDetails = $licensesModel->where('license_key', $licenseKey)->first();
+
+        log_message('info', '[Helper/License] License details to be updated in WooCommerce server: ' . json_encode($licenseDetails));
+
         if($licenseDetails['item_reference'] === 'woocommerce') {
             return updateWooCommerceOrder($licenseDetails['txn_id'], $licenseDetails);
         }
@@ -394,6 +397,7 @@ if (!function_exists('checkToUpdateWooCommerce')) {
 if (!function_exists('updateWooCommerceOrder')) {
     function updateWooCommerceOrder($orderID, $licenseDetails)
     {
+        log_message('info', '[Helper/License] Initiating update of license to the WooCommerce Server');
         // Get the owner ID
         $userID = $licenseDetails['owner_id'];
         
@@ -412,9 +416,16 @@ if (!function_exists('updateWooCommerceOrder')) {
         $woocommerceServerDomain = getMyConfig('', $userID)['woocommerceServerDomain'] !== '' ? getMyConfig('', $userID)['woocommerceServerDomain'] : NULL;
         $apiKey = getMyConfig('', $userID)['General_Info_SecretKey'] !== '' ? getMyConfig('', $userID)['General_Info_SecretKey'] : NULL;
 
+        helper('security');
+		$secret_key = $apiKey ? decrypt_secret_key($apiKey) : NULL;
+
         $licenseData = json_encode($licenseDetails, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_PRETTY_PRINT); // JSON encode the license data
 
-        if (!$orderID || !$woocommerceServerDomain || !$apiKey) {
+        log_message('error', '[Helper/License] Order ID: ' . $orderID);
+        log_message('error', '[Helper/License] WooCommerce Domain: ' . $woocommerceServerDomain);
+        log_message('error', '[Helper/License] Secret Key: ' . $secret_key);
+
+        if (!$orderID || !$woocommerceServerDomain || !$secret_key) {
             log_message('error', '[Helper/License] Failed to update WooCommerce Order Meta. Please check the required data.');
             $response = [
                 'success' => false,
@@ -431,10 +442,12 @@ if (!function_exists('updateWooCommerceOrder')) {
         // Construct the API call URL
         $api_call = $woocommerceServerDomain . 'wp-json/meraf/v1/update-order-meta/' . $orderID;
 
+        log_message('info', '[Helper/License] API Call: ' . $api_call);
+
         // Set optional parameters like headers or data
         $options = [
             'headers' => [
-                'X-API-KEY' => $apiKey,
+                'X-API-KEY' => $secret_key,
                 'Content-Type' => 'application/json',
             ],
             'connect_timeout' => 30,
@@ -446,12 +459,16 @@ if (!function_exists('updateWooCommerceOrder')) {
             'body' => $licenseData,
         ];
 
+        log_message('info', '[Helper/License] API headers: ' . json_encode($options) );
+
         // Load the CURLRequest library
         $curl = \Config\Services::curlrequest();
 
         try {
             // Make the POST request and send the data
             $cURLresponse = $curl->request('POST', $api_call, $options);
+
+            log_message('info', '[Helper/License] API Response: ' . json_encode($cURLresponse) );
 
             // Check the response status code
             if ($cURLresponse->getStatusCode() === 200) {

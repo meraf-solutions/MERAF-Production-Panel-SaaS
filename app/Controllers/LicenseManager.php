@@ -1311,6 +1311,8 @@ class LicenseManager extends BaseController
 
 			$apiUrl = base_url('api/license/unregister/' . $type . '/' . $name . '/' . $this->myConfig['License_DomainDevice_Registration_SecretKey'] . '/' . $licenseKey);
 
+			log_message('info', '[LicenseManager Controller] api url to be call: ' . $apiUrl);
+
 			$apiKey = $this->UserModel->getUserApiKey($userID);
 
 			// If the API key is not present, return null
