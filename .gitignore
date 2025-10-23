@@ -143,3 +143,4 @@ public/manifest.json
 public/service-worker.js
 docs/Single-User-Version
 docs/wp-plugins/WooCommerce-Addon-Plugin_symlinked
+public/assets/js/firebase-init.js

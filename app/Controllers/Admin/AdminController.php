@@ -4435,6 +4435,8 @@ class AdminController extends Home
 		if ($auth !== true) {
 			return $auth;
 		}
+
+		$fullServiceWorkerUrl = base_url('service-worker.js');
 		
 		return <<<EOT
 		// Firebase initialization and token management
@@ -4527,7 +4529,7 @@ class AdminController extends Home
 				Notification.requestPermission().then(permission => {
 					if (permission === 'granted') {
 						if ('serviceWorker' in navigator) {
-							navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
+							navigator.serviceWorker.register('{$fullServiceWorkerUrl}', { scope: '/' })
 								.then(function(registration) {
 									console.log('✅ FCM Service Worker registered with scope:', registration.scope);
 									navigator.serviceWorker.ready.then((readyRegistration) => {
