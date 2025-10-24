@@ -51,18 +51,18 @@ class SecurityHeaders implements FilterInterface
         // Content Security Policy - restrictive but functional for SaaS
         $cspPolicy = implode('; ', [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdn.datatables.net https://cdnjs.cloudflare.com https://www.google.com https://www.gstatic.com",
-            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com https://cdn.datatables.net https://cdnjs.cloudflare.com",
-            "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
-            "img-src 'self' data: https: blob:",
-            "connect-src 'self' https: wss: ws:",
-            "frame-src 'self' https://www.google.com", // For reCAPTCHA
+            // Allow Firebase SDK, Cloudflare analytics, and other CDN scripts
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://www.googleapis.com https://static.cloudflareinsights.com https://cdn.jsdelivr.net https://unpkg.com https://cdn.datatables.net https://cdnjs.cloudflare.com",
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com https://cdn.datatables.net",
+            "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net",
+            "img-src 'self' data: https:",
+            // Explicitly allow Firebase API endpoints and Cloudflare analytics
+            "connect-src 'self' https://fcm.googleapis.com https://firebaseinstallations.googleapis.com https://*.googleapis.com https://cloudflareinsights.com https:",
+            "frame-src 'none'",
             "object-src 'none'",
             "media-src 'self'",
-            "worker-src 'self' blob:",
-            "child-src 'self'",
-            "form-action 'self'",
-            "base-uri 'self'"
+            // Allow service workers from same origin for PWA and Firebase background messaging
+            "worker-src 'self'"
         ]);
         $response->setHeader('Content-Security-Policy', $cspPolicy);
 
