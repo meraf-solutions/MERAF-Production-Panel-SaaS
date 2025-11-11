@@ -51,14 +51,15 @@ class SecurityHeaders implements FilterInterface
         // Content Security Policy - restrictive but functional for SaaS
         $cspPolicy = implode('; ', [
             "default-src 'self'",
-            // Allow Firebase SDK, Cloudflare analytics, and other CDN scripts
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://www.googleapis.com https://static.cloudflareinsights.com https://cdn.jsdelivr.net https://unpkg.com https://cdn.datatables.net https://cdnjs.cloudflare.com",
+            // Allow Firebase SDK, Cloudflare analytics, Google reCAPTCHA, and other CDN scripts
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://www.googleapis.com https://www.google.com https://static.cloudflareinsights.com https://cdn.jsdelivr.net https://unpkg.com https://cdn.datatables.net https://cdnjs.cloudflare.com",
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com https://cdn.datatables.net",
             "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net",
             "img-src 'self' data: https:",
-            // Explicitly allow Firebase API endpoints and Cloudflare analytics
-            "connect-src 'self' https://fcm.googleapis.com https://firebaseinstallations.googleapis.com https://*.googleapis.com https://cloudflareinsights.com https:",
-            "frame-src 'none'",
+            // Explicitly allow Firebase API endpoints, Google reCAPTCHA, and Cloudflare analytics
+            "connect-src 'self' https://fcm.googleapis.com https://firebaseinstallations.googleapis.com https://*.googleapis.com https://www.google.com https://cloudflareinsights.com https:",
+            // Allow Google reCAPTCHA iframe (changed from 'none')
+            "frame-src https://www.google.com https://www.gstatic.com",
             "object-src 'none'",
             "media-src 'self'",
             // Allow service workers from same origin for PWA and Firebase background messaging

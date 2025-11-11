@@ -663,4 +663,248 @@ $routes->get("license/data-by-txn/(:any)/(:any)/(:any)", 'Api::retrieveLicenseBy
 $routes->get("license/data-by-key/(:any)/(:any)", 'Api::retrieveLicenseByKey/$1/$2');
 ```
 
-This multi-tenant SaaS technical implementation provides enterprise-grade security, complete tenant isolation, timezone-aware processing, and scalable architecture suitable for production deployment with multiple customers.
+### 8. CodeIgniter Shield Authentication Enhancements ✅ **SECURITY-CRITICAL FIXES**
+
+The SaaS platform implements enhanced authentication using CodeIgniter Shield with critical security fixes and user experience improvements.
+
+#### Custom Session Authenticator with Token Expiry Fix
+
+**Critical Security Bug**: CodeIgniter Shield v1.0+ has a vulnerability where remember-me token expiry dates are never validated in the `checkRememberMeToken()` method.
+
+**File**: `app/Authentication/Authenticators/Session.php`
+
+```php
+namespace App\Authentication\Authenticators;
+
+use CodeIgniter\I18n\Time;
+use stdClass;
+
+class Session extends \CodeIgniter\Shield\Authentication\Authenticators\Session
+{
+    /**
+     * SECURITY FIX: Add missing token expiry validation
+     * Shield's parent method only checks selector and validator hash
+     * but never validates if token has expired
+     */
+    protected function checkRememberMeToken(string $remember)
+    {
+        // Call parent for basic validation (selector + validator)
+        $token = parent::checkRememberMeToken($remember);
+
+        if ($token === false) {
+            return false;
+        }
+
+        // CRITICAL FIX: Validate token expiry (missing in Shield core)
+        $expiryTime = Time::parse($token->expires);
+        $currentTime = Time::now();
+
+        if ($currentTime->isAfter($expiryTime)) {
+            log_message('info', '[SHIELD-FIX] Remember-me token expired');
+            $this->getRememberModel()->purgeRememberTokens(
+                $this->provider->findById($token->user_id)
+            );
+            return false;
+        }
+
+        return $token;
+    }
+}
+```
+
+**Configuration**: `app/Config/Auth.php` (line 23)
+```php
+// Use custom authenticator with token expiry fix
+use App\Authentication\Authenticators\Session;
+```
+
+#### 30-Day Persistent Login Configuration
+
+**Session Duration**: Extended from 2 hours to 30 days to match remember-me token lifetime.
+
+**File**: `app/Config/Session.php` (line 47)
+```php
+// Extended to 30 days (2,592,000 seconds)
+public int $expiration = 2592000; // 30 * 86400
+```
+
+**File**: `app/Config/Auth.php` (line 215)
+```php
+public array $sessionConfig = [
+    'field'              => 'user',
+    'allowRemembering'   => true,
+    'rememberCookieName' => 'remember',
+    'rememberLength'     => 30 * DAY, // 30 days
+];
+```
+
+**Impact**: Users who check "Remember Me" stay logged in for 30 days instead of being logged out after 2 hours.
+
+#### Secure Cookie Configuration
+
+**File**: `app/Config/Cookie.php` (line 60)
+```php
+// HTTPS-only transmission for security
+public bool $secure = true;
+```
+
+**Security Benefit**: Prevents remember-me token theft via Man-in-the-Middle attacks by ensuring cookies are only transmitted over HTTPS.
+
+#### Conditional Google reCAPTCHA Integration
+
+**Enhanced Security**: Optional bot protection with conditional validation based on tenant configuration.
+
+**File**: `app/Controllers/AuthController.php`
+
+```php
+public function login()
+{
+    // Check if reCAPTCHA is enabled AND properly configured
+    $reCAPTCHA_enabled = !empty($this->myConfig['reCAPTCHA_enabled']) &&
+                        !empty($this->myConfig['reCAPTCHA_Site_Key']) &&
+                        !empty($this->myConfig['reCAPTCHA_Secret_Key']);
+
+    if ($reCAPTCHA_enabled) {
+        // Validate Google reCAPTCHA with secure decryption
+        $recaptchaResponse = $request->getPost('g-recaptcha-response');
+        $secretKey = decrypt_secret_key($this->myConfig['reCAPTCHA_Secret_Key'], $this->userID);
+
+        $verifyResponse = $this->validateRecaptcha($recaptchaResponse, $secretKey);
+
+        if (!$verifyResponse['success']) {
+            log_message('warning', "reCAPTCHA verification failed from IP: {$ipAddress}");
+            return redirect()->back()->with('error', lang('Notifications.reCAPTCHA_verification_failed'));
+        }
+    }
+
+    // Continue with authentication...
+}
+```
+
+**Features**:
+- **Conditional Validation**: Only validates reCAPTCHA when explicitly enabled in tenant settings
+- **Secure Key Storage**: reCAPTCHA secret keys stored encrypted per tenant
+- **Enhanced Logging**: IP address and failure reason tracking
+- **Theme Support**: Automatically uses dark/light theme based on user preference
+
+**View Integration**: `app/Views/auth/login.php` and `app/Views/auth/register.php`
+
+```php
+<?php
+// reCAPTCHA enabled check
+$reCAPTCHA_enabled = false;
+if($myConfig['reCAPTCHA_enabled'] &&
+   $myConfig['reCAPTCHA_Site_Key'] &&
+   $myConfig['reCAPTCHA_Secret_Key']) {
+    $reCAPTCHA_enabled = true;
+}
+?>
+
+<!-- Conditional reCAPTCHA widget rendering -->
+<?php if($reCAPTCHA_enabled) { ?>
+    <div class="g-recaptcha"
+         data-sitekey="<?= $myConfig['reCAPTCHA_Site_Key'] ?>"
+         <?= strpos($theme, 'dark') !== false ? 'data-theme="dark"' : ''?>>
+    </div>
+<?php } ?>
+
+<!-- Conditional script loading -->
+<?php if($reCAPTCHA_enabled) { ?>
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+<?php } ?>
+```
+
+#### Content Security Policy for reCAPTCHA
+
+**File**: `app/Filters/SecurityHeaders.php`
+
+```php
+$cspPolicy = implode('; ', [
+    "default-src 'self'",
+    // Allow Google reCAPTCHA scripts
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com ...",
+    // Allow Google reCAPTCHA API validation
+    "connect-src 'self' https://www.google.com ...",
+    // CRITICAL: Allow reCAPTCHA iframe (changed from 'none')
+    "frame-src https://www.google.com https://www.gstatic.com",
+    "object-src 'none'"
+]);
+```
+
+**Important**: Without `frame-src` allowing Google domains, reCAPTCHA iframe will be blocked by browser CSP policy.
+
+#### Route Architecture: Preventing Premature Session Initialization
+
+**Critical Bug Fix**: Calling `getMyConfig()` during route compilation triggers premature session initialization, causing file system errors.
+
+**File**: `app/Config/Routes.php`
+
+❌ **INCORRECT** (causes "filesize(): stat failed" errors):
+```php
+// WRONG: Session accessed during route compilation
+$myConfig = getMyConfig();
+if ($myConfig['reCAPTCHA_enabled']) {
+    $routes->post('login', 'AuthController::login');
+}
+```
+
+✅ **CORRECT** (routes registered unconditionally, config checked at request time):
+```php
+// Load Shield's default routes first
+service('auth')->routes($routes);
+
+// Override login/register POST routes with custom routes
+// AuthController checks reCAPTCHA config at request time
+$routes->post('login', 'AuthController::login', ['as' => 'custom-login']);
+$routes->post('register', 'AuthController::register', ['as' => 'custom-register']);
+```
+
+**Why This Works**:
+1. Routes always registered (no conditional logic during bootstrap)
+2. `getMyConfig()` called during HTTP request lifecycle in AuthController
+3. Session properly initialized by CodeIgniter before controller execution
+4. No file system errors from premature session file access
+
+#### SaaS-Specific Authentication Features
+
+The SaaS version includes additional security enhancements beyond the single-user version:
+
+1. **Enhanced Input Sanitization**: `sanitize_input()` helper for all user inputs
+2. **Secure Key Decryption**: `decrypt_secret_key()` for tenant-specific reCAPTCHA keys
+3. **Comprehensive Logging**: IP addresses, user agents, and failure reasons tracked
+4. **Tenant Isolation**: Per-tenant reCAPTCHA configuration and encryption keys
+5. **Advanced Validation**: Email format, password strength, and registration rules
+6. **Security Headers**: Strict CSP, HSTS, and cross-origin policies
+
+#### Authentication Testing Checklist
+
+✅ **Remember Me Functionality**
+- Login with "Remember Me" checked
+- Verify session persists for 30 days
+- Confirm token expires after 30 days
+- Check expired tokens are rejected and purged
+
+✅ **reCAPTCHA Integration**
+- Enable reCAPTCHA in tenant settings
+- Verify widget displays on login/register pages
+- Confirm validation works (both success and failure)
+- Disable reCAPTCHA, verify login/register works without it
+
+✅ **Theme Support**
+- Switch to dark theme, verify reCAPTCHA uses dark theme
+- Switch to light theme, verify reCAPTCHA uses light theme
+
+✅ **Security Validation**
+- Verify cookies only transmitted over HTTPS
+- Confirm CSP allows reCAPTCHA iframe
+- Check no "filesize(): stat failed" errors in logs
+- Validate tenant isolation (different users have different reCAPTCHA keys)
+
+✅ **Multi-Tenant Testing**
+- Tenant A enables reCAPTCHA, Tenant B disables it
+- Verify each tenant's configuration applies independently
+- Confirm encrypted reCAPTCHA keys are tenant-specific
+
+---
+
+This multi-tenant SaaS technical implementation provides enterprise-grade security, complete tenant isolation, timezone-aware processing, enhanced authentication with 30-day persistent login, conditional reCAPTCHA protection, and scalable architecture suitable for production deployment with multiple customers.

@@ -150,11 +150,27 @@ Configure payment methods in **Admin** → **Payment Settings**:
 - **Stripe** - API keys and webhook endpoints
 - **Offline Payments** - Bank transfer instructions
 
-### Multi-Tenant Authentication
-The SaaS system uses dual authentication layers:
+### Multi-Tenant Authentication & Security
+
+The SaaS system implements enhanced authentication with critical security fixes:
+
+#### CodeIgniter Shield Enhancements
+- **30-Day Persistent Login** - Extended session from 2 hours to 30 days
+- **Token Expiry Security Fix** - Patches Shield's missing remember-me token validation
+- **Secure Cookies** - HTTPS-only transmission prevents token theft
+- **Custom Session Authenticator** - Properly validates and expires authentication tokens
+
+#### Google reCAPTCHA Protection
+- **Tenant-Configurable** - Each tenant can enable/disable independently
+- **Theme Support** - Automatic dark/light theme based on user preference
+- **Secure Key Storage** - Encrypted reCAPTCHA keys per tenant
+- **CSP Compatible** - Security headers configured for reCAPTCHA iframe
+
+#### Dual Authentication Layers
 - **Admin Secret Keys** - For system administration
 - **User-API-Keys** - 6-character tenant-specific keys for API access
-- **Tenant Isolation** - Complete data separation per user
+- **Tenant Isolation** - Complete data separation with encryption per user
+- **Enhanced Logging** - IP addresses and security events tracked
 
 ## Development
 
@@ -493,6 +509,18 @@ Comprehensive SaaS documentation is available:
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Changelog
+
+### Version 2.3.0 ✅ **AUTHENTICATION SECURITY OVERHAUL**
+- **🔐 Shield Security Fix** - Patches critical remember-me token expiry validation bug
+- **⏰ 30-Day Persistent Login** - Extended session duration from 2 hours to 30 days
+- **🔒 Secure Cookie Configuration** - HTTPS-only transmission prevents token theft
+- **🤖 Conditional reCAPTCHA** - Tenant-configurable bot protection with theme support
+- **🛡️ Enhanced CSP** - Updated Content Security Policy for reCAPTCHA compatibility
+- **🐛 Session Error Fix** - Resolved "filesize(): stat failed" errors from premature session init
+- **📋 Route Architecture** - Proper route registration order prevents session initialization bugs
+- **🔑 Tenant-Specific Keys** - Encrypted reCAPTCHA keys per tenant with secure decryption
+- **📊 Enhanced Logging** - IP addresses, user agents, and security events tracked
+- **📚 Documentation** - Complete authentication guide in technical.md
 
 ### Version 2.2.0 ✅ **CRITICAL BUG FIXES & API ENHANCEMENTS**
 - **🕐 Timezone-Aware Processing** - Fixed 8-hour time loss bug in WooCommerce integrations

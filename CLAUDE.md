@@ -200,14 +200,40 @@ The SaaS platform provides three REST API endpoints for comprehensive subscripti
 - **LOG API access** for usage analytics and security monitoring
 
 ### Multi-Tenant Authentication & Security
-- User authentication with CodeIgniter Shield
-- User-API-Key authentication (6-character alphanumeric)
-- Dual authentication layers (Admin + Tenant)
-- User-specific AES-256-GCM encryption
-- Timing-safe authentication for security
-- IP blocking functionality per tenant
-- Session management with tenant isolation
-- Role-based access control
+
+#### CodeIgniter Shield with Critical Security Fixes
+- **Custom Session Authenticator**: Fixes Shield's missing token expiry validation bug
+- **30-Day Persistent Login**: Extended session duration from 2 hours to 30 days
+- **Secure Cookies**: HTTPS-only transmission prevents token theft
+- **Token Expiry Enforcement**: Remember-me tokens properly expire after 30 days
+- **File**: `app/Authentication/Authenticators/Session.php` - Custom authenticator extending Shield
+
+#### Conditional Google reCAPTCHA Integration
+- **Tenant-Configurable**: Each tenant can enable/disable reCAPTCHA independently
+- **Secure Key Storage**: reCAPTCHA keys stored encrypted per tenant via `decrypt_secret_key()`
+- **Theme Support**: Automatically uses dark/light theme based on user preference
+- **Enhanced Logging**: IP addresses, user agents, and failure reasons tracked
+- **CSP Compatible**: Content Security Policy allows reCAPTCHA iframe and scripts
+- **Files**:
+  - `app/Controllers/AuthController.php` - Conditional validation logic
+  - `app/Views/auth/login.php` & `register.php` - Theme-aware reCAPTCHA widget
+  - `app/Filters/SecurityHeaders.php` - CSP policy with reCAPTCHA support
+
+#### Session Management & Route Architecture
+- **No Premature Session Init**: Routes registered unconditionally, config checked at request time
+- **Critical Fix**: Prevents "filesize(): stat failed" errors from calling `getMyConfig()` during route compilation
+- **Route Override Strategy**: Custom auth routes registered AFTER Shield routes
+- **File**: `app/Config/Routes.php` - Proper route registration order
+
+#### Multi-Tenant Security Features
+- **User-API-Key Authentication**: 6-character alphanumeric keys with automatic encryption
+- **Dual Authentication Layers**: Admin + Tenant isolation
+- **User-Specific AES-256-GCM Encryption**: Per-tenant encryption keys
+- **Timing-Safe Authentication**: Constant-time comparison prevents timing attacks
+- **IP Blocking**: Per-tenant IP whitelist/blacklist functionality
+- **Enhanced Input Sanitization**: `sanitize_input()` helper for all user inputs
+- **Comprehensive Logging**: Security events with IP addresses and user agents
+- **Role-Based Access Control**: Fine-grained permissions per tenant
 
 ### SaaS-Specific Features
 - Complete tenant data isolation

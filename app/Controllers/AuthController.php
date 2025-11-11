@@ -107,29 +107,31 @@ class AuthController extends Controller
         $ipAddress = $request->getIPAddress();
         $userAgent = $request->getUserAgent()->getAgentString();
 
-        // Make sure reCAPTCHA Secret Key is set
-        if (!$this->myConfig['reCAPTCHA_Secret_Key']) {
-            log_message('error', "reCAPTCHA secret key not configured, IP: {$ipAddress}");
-            return redirect()->back()->withInput()->with('errors', lang('Notifications.reCAPTCHA_secret_not_set'));
-        }
+        // IMPORTANT: Only validate reCAPTCHA if it's explicitly enabled
+        // Check both the enabled flag AND that the keys are configured
+        $reCAPTCHA_enabled = !empty($this->myConfig['reCAPTCHA_enabled']) &&
+                            !empty($this->myConfig['reCAPTCHA_Site_Key']) &&
+                            !empty($this->myConfig['reCAPTCHA_Secret_Key']);
 
-        // Validate Google reCAPTCHA with secure decryption
-        $recaptchaResponse = $request->getPost('g-recaptcha-response');
+        if ($reCAPTCHA_enabled) {
+            // Validate Google reCAPTCHA with secure decryption
+            $recaptchaResponse = $request->getPost('g-recaptcha-response');
 
-        if (empty($recaptchaResponse)) {
-            log_message('warning', "reCAPTCHA response missing from IP: {$ipAddress}");
-            return redirect()->back()->withInput()->with('error', lang('Notifications.reCAPTCHA_verification_failed'));
-        }
+            if (empty($recaptchaResponse)) {
+                log_message('warning', "reCAPTCHA response missing from IP: {$ipAddress}");
+                return redirect()->back()->withInput()->with('error', lang('Notifications.reCAPTCHA_verification_failed'));
+            }
 
-        // Decrypt reCAPTCHA secret key if needed
-        $secretKey = decrypt_secret_key($this->myConfig['reCAPTCHA_Secret_Key'], $this->userID);
+            // Decrypt reCAPTCHA secret key if needed
+            $secretKey = decrypt_secret_key($this->myConfig['reCAPTCHA_Secret_Key'], $this->userID);
 
-        // Validate reCAPTCHA with enhanced error handling
-        $verifyResponse = $this->validateRecaptcha($recaptchaResponse, $secretKey);
+            // Validate reCAPTCHA with enhanced error handling
+            $verifyResponse = $this->validateRecaptcha($recaptchaResponse, $secretKey);
 
-        if (!$verifyResponse['success']) {
-            log_message('warning', "reCAPTCHA verification failed from IP: {$ipAddress}, Reason: {$verifyResponse['error']}");
-            return redirect()->back()->withInput()->with('error', lang('Notifications.reCAPTCHA_verification_failed'));
+            if (!$verifyResponse['success']) {
+                log_message('warning', "reCAPTCHA verification failed from IP: {$ipAddress}, Reason: {$verifyResponse['error']}");
+                return redirect()->back()->withInput()->with('error', lang('Notifications.reCAPTCHA_verification_failed'));
+            }
         }
 
         // Enhanced input validation and sanitization
@@ -234,29 +236,31 @@ class AuthController extends Controller
             return redirect()->back()->withInput()->with('error', lang('Auth.registerDisabled'));
         }
 
-        // Make sure reCAPTCHA Secret Key is set
-        if (!$this->myConfig['reCAPTCHA_Secret_Key']) {
-            log_message('error', "reCAPTCHA secret key not configured for registration, IP: {$ipAddress}");
-            return redirect()->back()->withInput()->with('errors', lang('Notifications.reCAPTCHA_secret_not_set'));
-        }
+        // IMPORTANT: Only validate reCAPTCHA if it's explicitly enabled
+        // Check both the enabled flag AND that the keys are configured
+        $reCAPTCHA_enabled = !empty($this->myConfig['reCAPTCHA_enabled']) &&
+                            !empty($this->myConfig['reCAPTCHA_Site_Key']) &&
+                            !empty($this->myConfig['reCAPTCHA_Secret_Key']);
 
-        // Validate Google reCAPTCHA
-        $recaptchaResponse = $request->getPost('g-recaptcha-response');
+        if ($reCAPTCHA_enabled) {
+            // Validate Google reCAPTCHA
+            $recaptchaResponse = $request->getPost('g-recaptcha-response');
 
-        if (empty($recaptchaResponse)) {
-            log_message('warning', "reCAPTCHA response missing in registration from IP: {$ipAddress}");
-            return redirect()->back()->withInput()->with('error', lang('Notifications.reCAPTCHA_verification_failed'));
-        }
+            if (empty($recaptchaResponse)) {
+                log_message('warning', "reCAPTCHA response missing in registration from IP: {$ipAddress}");
+                return redirect()->back()->withInput()->with('error', lang('Notifications.reCAPTCHA_verification_failed'));
+            }
 
-        // Decrypt reCAPTCHA secret key if needed
-        $secretKey = decrypt_secret_key($this->myConfig['reCAPTCHA_Secret_Key'], $this->userID);
+            // Decrypt reCAPTCHA secret key if needed
+            $secretKey = decrypt_secret_key($this->myConfig['reCAPTCHA_Secret_Key'], $this->userID);
 
-        // Validate reCAPTCHA with enhanced error handling
-        $verifyResponse = $this->validateRecaptcha($recaptchaResponse, $secretKey);
+            // Validate reCAPTCHA with enhanced error handling
+            $verifyResponse = $this->validateRecaptcha($recaptchaResponse, $secretKey);
 
-        if (!$verifyResponse['success']) {
-            log_message('warning', "reCAPTCHA verification failed in registration from IP: {$ipAddress}, Reason: {$verifyResponse['error']}");
-            return redirect()->back()->withInput()->with('error', lang('Notifications.reCAPTCHA_verification_failed'));
+            if (!$verifyResponse['success']) {
+                log_message('warning', "reCAPTCHA verification failed in registration from IP: {$ipAddress}, Reason: {$verifyResponse['error']}");
+                return redirect()->back()->withInput()->with('error', lang('Notifications.reCAPTCHA_verification_failed'));
+            }
         }
 
         // Enhanced input validation with sanitization

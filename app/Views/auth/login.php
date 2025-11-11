@@ -41,8 +41,8 @@ if($myConfig['reCAPTCHA_enabled'] && $myConfig['reCAPTCHA_Site_Key'] && $myConfi
             <div class="row">
                 <div class="col-12">
                     <div class="card form-signin p-4 rounded shadow">
-                        <?php $formURL = $reCAPTCHA_enabled ? 'custom-login' : 'login'; ?>
-                        <form action="<?= url_to($formURL) ?>" method="post">
+                        <!-- Always use 'login' route - AuthController handles reCAPTCHA conditionally -->
+                        <form action="<?= url_to('login') ?>" method="post">
                             <?= csrf_field() ?>
                             <a href="<?= base_url() ?>"><img src="<?= $appLogo ?>" class="mb-4 d-block mx-auto" alt="<?= $myConfig['appName'] ?>"></a>
                             <h5 class="mb-3 text-center"><?= lang('Auth.login') ?></h5>

@@ -39,8 +39,12 @@ class Session extends BaseConfig
      *
      * The number of SECONDS you want the session to last.
      * Setting to 0 (zero) means expire when the browser is closed.
+     *
+     * IMPORTANT: Extended to 30 days (2,592,000 seconds) to match remember-me duration.
+     * This ensures users who check "Remember Me" stay logged in for 30 days.
+     * Previous value of 7200 seconds (2 hours) caused premature logout.
      */
-    public int $expiration = 7200;
+    public int $expiration = 2592000; // 30 * 86400 = 30 days
 
     /**
      * --------------------------------------------------------------------------

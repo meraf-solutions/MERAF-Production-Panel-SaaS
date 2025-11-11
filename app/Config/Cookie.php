@@ -53,8 +53,11 @@ class Cookie extends BaseConfig
      * --------------------------------------------------------------------------
      *
      * Cookie will only be set if a secure HTTPS connection exists.
+     *
+     * SECURITY: Enabled to ensure cookies (including remember-me tokens) are only
+     * transmitted over HTTPS connections, preventing token theft via MitM attacks.
      */
-    public bool $secure = false;
+    public bool $secure = true;
 
     /**
      * --------------------------------------------------------------------------

@@ -23,36 +23,6 @@ $routes->get('setlocale/(:any)', 'Localization::setLocale/$1');
  ****************************/
 $routes->post('set-timezone', 'Home::setTimezone');
 
-/******************************
-* Custom login with recaptcha *
-******************************/
-$reCAPTCHA_enabled = false; // Initialize reCAPTCHA enabled flag
-try {
-    if (!isset($myConfig)) { // Load the configuration
-        $myConfig = getMyConfig('', 0);
-    }
-    if (isset($myConfig['reCAPTCHA_enabled']) && $myConfig['reCAPTCHA_enabled'] &&
-        isset($myConfig['reCAPTCHA_Site_Key']) && $myConfig['reCAPTCHA_Site_Key'] &&
-        isset($myConfig['reCAPTCHA_Secret_Key']) && $myConfig['reCAPTCHA_Secret_Key']) {
-        $reCAPTCHA_enabled = true; // Check if reCAPTCHA is enabled and has the required keys
-    }
-} catch (Exception $e) {
-    // If configuration loading fails (e.g., during installation), disable reCAPTCHA
-    $reCAPTCHA_enabled = false;
-}
-// $routes->get('login', 'AuthController::login', ['filter' => 'guest']);
-
-if ($reCAPTCHA_enabled) {
-    $routes->post('login', 'AuthController::login', ['as' => 'custom-login']);
-    $routes->post('register', 'AuthController::register', ['as' => 'custom-register']);
-} else {
-    $routes->post('register', 'RegisterController::registerAction');
-}
-
-// Add custom routes for registration
-$routes->get('register', 'RegisterController::register');
-$routes->post('register', 'RegisterController::registerAction');
-
 /***************
  * Error Pages *
  **************/
@@ -563,3 +533,13 @@ $routes->post('notification/current-device', 'NotificationController::saveToSess
  * Codeigniter Shield (authentication) *
  **************************************/
 service('auth')->routes($routes);
+
+/*************************************************
+ * Custom authentication routes with reCAPTCHA   *
+ * IMPORTANT: Must come AFTER Shield routes      *
+ * to properly override login/register endpoints *
+ ************************************************/
+// Override Shield's login/register POST routes with custom routes
+// AuthController handles reCAPTCHA validation conditionally at runtime
+$routes->post('login', 'AuthController::login', ['as' => 'custom-login']);
+$routes->post('register', 'AuthController::register', ['as' => 'custom-register']);
