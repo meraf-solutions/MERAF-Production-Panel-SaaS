@@ -34,8 +34,8 @@ class SecurityHeaders implements FilterInterface
         // Prevent MIME type sniffing
         $response->setHeader('X-Content-Type-Options', 'nosniff');
 
-        // Prevent clickjacking attacks
-        $response->setHeader('X-Frame-Options', 'DENY');
+        // Prevent clickjacking attacks (SAMEORIGIN allows iframes from same domain)
+        $response->setHeader('X-Frame-Options', 'SAMEORIGIN');
 
         // Enable XSS protection (legacy, but still useful for older browsers)
         $response->setHeader('X-XSS-Protection', '1; mode=block');

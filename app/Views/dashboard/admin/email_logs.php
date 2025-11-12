@@ -177,7 +177,7 @@
         // View email content
         $('#email-logs-table').on('click', '.view-email', function() {
             var id = $(this).data('id');
-            $('#emailContentFrame').attr('src', '<?= $pageUrl . 'view/' ?>' + id);
+            $('#emailContentFrame').attr('src', '<?= $pageUrl . 'body/' ?>' + id);
             $('#emailContentModal').modal('show');
         });
         
